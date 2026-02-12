@@ -140,10 +140,19 @@ class ActionButtons:
         delay = self._config.get("screenshot", {}).get("delay", 0)
         quality = QUALITY_MAP.get(self._config.get("screenshot", {}).get("quality", "medium"), 70)
 
-        self._output.show_loading("Capturing screen...")
+        # Hide the window so it doesn't appear in the screenshot
+        self._root.withdraw()
 
         def _do_capture():
+            import time
+            # Wait for the window to fully disappear from screen
+            time.sleep(0.3)
+
             img_b64 = capture_full_screen(delay=delay, quality=quality)
+
+            # Re-show the window
+            self._root.after(0, self._root.deiconify)
+
             if img_b64 is None:
                 self._root.after(0, self._output.show_error,
                                  "Screenshot failed. pyautogui may not be available on this system.")
