@@ -171,11 +171,13 @@ function render() {
 
   switch (view) {
     case 'home':    renderHome(app);             break;
+    case 'public':  renderPublicSets(app);       break;
     case 'create':  renderCreate(app, null);     break;
     case 'edit':    renderCreate(app, param);    break;
-    case 'study':   renderStudy(app, param);     break;
-    case 'quiz':    renderQuiz(app, param);      break;
-    case 'shared':  renderShared(app, param);    break;
+    case 'study':   renderStudy(app, param);        break;
+    case 'quiz':    renderQuiz(app, param);         break;
+    case 'written': renderWrittenQuiz(app, param);  break;
+    case 'shared':  renderShared(app, param);       break;
     default:        renderHome(app);
   }
 }
@@ -238,6 +240,7 @@ function renderHome(app) {
         <div class="set-card-actions">
           <button class="btn btn-primary btn-sm" onclick="navigate('study/${set.id}')">Study</button>
           <button class="btn btn-outline btn-sm" onclick="navigate('quiz/${set.id}')">Quiz</button>
+          <button class="btn btn-outline btn-sm" onclick="navigate('written/${set.id}')">Written</button>
           <button class="btn btn-ghost btn-sm" onclick="navigate('edit/${set.id}')">Edit</button>
           ${set.isPublic
             ? `<button class="btn btn-ghost btn-sm" onclick="openShare('${set.id}')">Share</button>`
@@ -258,6 +261,76 @@ function renderHome(app) {
     </div>
     <div class="sets-grid">${grid}</div>`;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   PUBLIC SETS VIEW
+   ═══════════════════════════════════════════════════════════ */
+function renderPublicSets(app) {
+  const sets = DB.getSets().filter(s => s.isPublic);
+
+  app.innerHTML = `
+    <div class="home-header">
+      <div>
+        <h1>Public Sets</h1>
+        <p>Sets you've made public — share these links with others</p>
+      </div>
+      <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
+    </div>`;
+
+  if (sets.length === 0) {
+    app.innerHTML += `
+      <div class="empty-state">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <h2>No public sets yet</h2>
+        <p>Edit a set and turn on <strong>Make Public</strong> to generate a shareable link.</p>
+        <button class="btn btn-primary btn-lg" onclick="navigate('home')">← Back to My Sets</button>
+      </div>`;
+    return;
+  }
+
+  const list = sets.map(set => {
+    const url = shareUrl(set);
+    const mastery = DB.getMastery(set);
+    return `
+      <div class="public-set-card">
+        <div class="public-set-info">
+          <div class="set-card-title">${escHtml(set.name)}</div>
+          ${set.description ? `<div class="set-card-desc">${escHtml(set.description)}</div>` : ''}
+          <div style="display:flex;gap:.5rem;align-items:center;margin-top:.4rem;flex-wrap:wrap">
+            <span class="badge badge-count">${set.cards.length} card${set.cards.length !== 1 ? 's' : ''}</span>
+            <span class="badge badge-public">🌐 Public</span>
+            <span style="font-size:.75rem;color:var(--text-muted)">Mastery: ${mastery}%</span>
+          </div>
+        </div>
+        <div class="public-set-url-row">
+          <input class="public-share-input" type="text" readonly value="${escAttr(url)}" onclick="this.select()" />
+          <button class="btn btn-outline btn-sm" onclick="copyPublicUrl(this,'${escAttr(url)}')">Copy</button>
+        </div>
+        <div class="public-set-actions">
+          <button class="btn btn-primary btn-sm" onclick="navigate('study/${set.id}')">Study</button>
+          <button class="btn btn-outline btn-sm" onclick="navigate('quiz/${set.id}')">Quiz</button>
+          <button class="btn btn-outline btn-sm" onclick="navigate('written/${set.id}')">Written</button>
+          <button class="btn btn-ghost btn-sm" onclick="navigate('edit/${set.id}')">Edit</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  app.innerHTML += `<div class="public-sets-list">${list}</div>`;
+}
+
+window.copyPublicUrl = function(btn, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1800);
+  }).catch(() => {
+    showToast('Copy failed — click the link field and copy manually.');
+  });
+};
 
 /* ═══════════════════════════════════════════════════════════
    CREATE / EDIT VIEW
@@ -806,6 +879,187 @@ function renderQuiz(app, setId) {
           <button class="btn btn-primary" onclick="nextQuestion()">
             ${qIndex < shuffled.length - 1 ? 'Next Question →' : 'See Results'}
           </button>
+        </div>
+      </div>`;
+  }
+
+  renderQuestion();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WRITTEN QUIZ VIEW
+   ═══════════════════════════════════════════════════════════ */
+function renderWrittenQuiz(app, setId) {
+  const set = DB.getSetById(setId);
+  if (!set) { navigate('home'); return; }
+
+  const cards = set.cards;
+  if (cards.length === 0) {
+    app.innerHTML = `
+      <div class="info-screen">
+        <div style="font-size:2.5rem">📚</div>
+        <h2>No Cards</h2>
+        <p>Add cards to this set before taking a written quiz.</p>
+        <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
+          <button class="btn btn-primary" onclick="navigate('edit/${setId}')">Edit Set</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const shuffled = shuffle([...cards]);
+  let qIndex  = 0;
+  let score   = 0;
+  let wrong   = 0;
+  let answered = false;
+
+  function normalize(s) {
+    return String(s).trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+  }
+
+  function renderQuestion() {
+    if (qIndex >= shuffled.length) { showWrittenResult(); return; }
+    answered = false;
+    const card = shuffled[qIndex];
+
+    const sp = DB.getSetProgress(setId);
+    const history = sp.quizHistory || [];
+    const lastPct = history.length > 0
+      ? Math.round(history[history.length - 1].score / history[history.length - 1].total * 100) + '% last quiz'
+      : '';
+
+    app.innerHTML = `
+      <div class="quiz-header">
+        <div>
+          <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">Written Quiz</div>
+          <h2>${escHtml(set.name)}</h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('home')">← Back</button>
+      </div>
+
+      <div style="max-width:640px;margin:0 auto .75rem">
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-label">
+            <span>Question ${qIndex + 1} of ${shuffled.length}</span>
+            <span>${score} correct${lastPct ? ' · ' + lastPct : ''}</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" style="width:${Math.round(qIndex/shuffled.length*100)}%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="quiz-card">
+        <div class="quiz-question">${escHtml(card.front)}</div>
+        <div class="written-input-wrap">
+          <input id="written-answer" type="text" class="written-answer-input"
+            placeholder="Type your answer…" autocomplete="off" spellcheck="false" />
+          <button class="btn btn-primary btn-wide" id="written-submit-btn" onclick="submitWritten()">Submit</button>
+        </div>
+        <div id="written-feedback" class="written-feedback"></div>
+        <div id="quiz-next" class="quiz-next" style="display:none">
+          <button class="btn btn-primary" onclick="nextWrittenQuestion()">
+            ${qIndex < shuffled.length - 1 ? 'Next Question →' : 'See Results'}
+          </button>
+        </div>
+      </div>`;
+
+    const input = document.getElementById('written-answer');
+    input.focus();
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') submitWritten(); });
+
+    window.submitWritten = function() {
+      if (answered) return;
+      const userAnswer = document.getElementById('written-answer').value;
+      if (!userAnswer.trim()) { showToast('Please type an answer first.'); return; }
+      answered = true;
+
+      const isCorrect = normalize(userAnswer) === normalize(card.back);
+      if (isCorrect) score++; else wrong++;
+      DB.recordCardAnswer(setId, card.id, isCorrect);
+
+      const input = document.getElementById('written-answer');
+      input.disabled = true;
+      input.classList.add(isCorrect ? 'written-correct' : 'written-wrong');
+
+      document.getElementById('written-submit-btn').disabled = true;
+
+      const fb = document.getElementById('written-feedback');
+      fb.className = `written-feedback ${isCorrect ? 'correct' : 'wrong'}`;
+      fb.innerHTML = isCorrect
+        ? '✓ Correct!'
+        : `✗ Incorrect — the answer was: <strong>${escHtml(card.back)}</strong>`;
+
+      document.getElementById('quiz-next').style.display = 'flex';
+    };
+  }
+
+  window.nextWrittenQuestion = function() {
+    qIndex++;
+    renderQuestion();
+  };
+
+  function showWrittenResult() {
+    DB.recordQuizResult(setId, score, shuffled.length);
+    const pct = Math.round(score / shuffled.length * 100);
+
+    const r    = 54;
+    const circ = 2 * Math.PI * r;
+    const dash = (pct / 100) * circ;
+    const color = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)';
+
+    const sp = DB.getSetProgress(setId);
+    const history = sp.quizHistory || [];
+    const histText = history.length > 1
+      ? `Best score: ${Math.max(...history.map(h => Math.round(h.score/h.total*100)))}% over ${history.length} quizzes`
+      : 'First written quiz complete!';
+
+    app.innerHTML = `
+      <div class="quiz-header">
+        <div>
+          <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">Written Quiz Results</div>
+          <h2>${escHtml(set.name)}</h2>
+        </div>
+      </div>
+      <div class="quiz-score-card">
+        <div style="font-size:2rem">✍️</div>
+        <h2>Written Quiz Complete!</h2>
+        <p>You scored ${score} out of ${shuffled.length}</p>
+
+        <div class="score-ring-wrap">
+          <div class="score-ring">
+            <svg width="140" height="140" viewBox="0 0 140 140">
+              <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--border)" stroke-width="14"/>
+              <circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="14"
+                stroke-dasharray="${dash} ${circ}"
+                stroke-linecap="round"/>
+            </svg>
+            <div class="score-ring-text">
+              <span class="score-ring-pct" style="color:${color}">${pct}%</span>
+              <span class="score-ring-label">Score</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="score-breakdown">
+          <div class="score-stat">
+            <span class="score-stat-num correct">${score}</span>
+            <span class="score-stat-label">Correct</span>
+          </div>
+          <div class="score-stat">
+            <span class="score-stat-num wrong">${wrong}</span>
+            <span class="score-stat-label">Incorrect</span>
+          </div>
+        </div>
+
+        <div class="quiz-history">${histText}</div>
+
+        <div class="complete-actions">
+          <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
+          <button class="btn btn-outline" onclick="navigate('written/${setId}')">Retry Written</button>
+          <button class="btn btn-outline" onclick="navigate('quiz/${setId}')">Multiple Choice</button>
+          <button class="btn btn-primary" onclick="navigate('study/${setId}')">Study Cards</button>
         </div>
       </div>`;
   }
