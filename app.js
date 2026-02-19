@@ -4,38 +4,43 @@
    ──────────────────────────────────────────────────────────── */
 
 /* ═══════════════════════════════════════════════════════════
-   FIREBASE CONFIG
+   SUPABASE CONFIG
    ─────────────────────────────────────────────────────────
    To enable the community Public Sets page:
-   1. Go to https://console.firebase.google.com
-   2. Create a project → Add a web app → copy firebaseConfig
-   3. In Firestore Database → Rules, set:
-        allow read: if true;
-        allow write: if true;
-      (or tighten rules once happy)
-   4. Replace the values below with your own config.
+   1. Go to https://supabase.com → New project (free)
+   2. In the SQL Editor run:
+
+      CREATE TABLE public_sets (
+        id           TEXT PRIMARY KEY,
+        name         TEXT,
+        description  TEXT,
+        card_count   INTEGER,
+        encoded      TEXT,
+        publisher_id TEXT,
+        published_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      ALTER TABLE public_sets ENABLE ROW LEVEL SECURITY;
+      CREATE POLICY "read all"   ON public_sets FOR SELECT USING (true);
+      CREATE POLICY "insert all" ON public_sets FOR INSERT WITH CHECK (true);
+      CREATE POLICY "delete own" ON public_sets FOR DELETE USING (true);
+
+   3. Go to Settings → API → copy Project URL and anon public key
+   4. Paste them below.
    ═══════════════════════════════════════════════════════════ */
-const FIREBASE_CONFIG = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId:             "YOUR_APP_ID",
-};
+const SUPABASE_URL      = 'YOUR_SUPABASE_URL';       // e.g. https://xyzxyz.supabase.co
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';  // long JWT string
 
 let _db = null;
 function getDb() {
   if (_db) return _db;
+  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') return null;
   try {
-    if (FIREBASE_CONFIG.apiKey === 'YOUR_API_KEY') return null;
-    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-    _db = firebase.firestore();
+    _db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } catch (e) { _db = null; }
   return _db;
 }
 
-// Returns a stable anonymous ID for this browser session
+// Stable anonymous ID for this browser
 function getPublisherId() {
   let id = localStorage.getItem('sf_publisher_id');
   if (!id) { id = uid(); localStorage.setItem('sf_publisher_id', id); }
@@ -46,13 +51,14 @@ async function publishSetToCloud(set) {
   const db = getDb();
   if (!db) return;
   try {
-    await db.collection('publicSets').doc(`${getPublisherId()}_${set.id}`).set({
-      name:        set.name,
-      description: set.description || '',
-      cardCount:   set.cards.length,
-      encoded:     encodeSet(set),
-      publisherId: getPublisherId(),
-      publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    await db.from('public_sets').upsert({
+      id:           `${getPublisherId()}_${set.id}`,
+      name:         set.name,
+      description:  set.description || '',
+      card_count:   set.cards.length,
+      encoded:      encodeSet(set),
+      publisher_id: getPublisherId(),
+      published_at: new Date().toISOString(),
     });
   } catch (e) { console.warn('Failed to publish set:', e); }
 }
@@ -61,7 +67,7 @@ async function unpublishSetFromCloud(setId) {
   const db = getDb();
   if (!db) return;
   try {
-    await db.collection('publicSets').doc(`${getPublisherId()}_${setId}`).delete();
+    await db.from('public_sets').delete().eq('id', `${getPublisherId()}_${setId}`);
   } catch (e) { console.warn('Failed to unpublish set:', e); }
 }
 
@@ -356,15 +362,17 @@ function renderPublicSets(app) {
     return;
   }
 
-  db.collection('publicSets')
-    .orderBy('publishedAt', 'desc')
+  db.from('public_sets')
+    .select('*')
+    .order('published_at', { ascending: false })
     .limit(50)
-    .get()
-    .then(snapshot => {
+    .then(({ data, error }) => {
       const body = document.getElementById('public-sets-body');
       if (!body) return;
 
-      if (snapshot.empty) {
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
         body.innerHTML = `
           <div class="empty-state">
             <div style="font-size:2.5rem">📭</div>
@@ -376,16 +384,15 @@ function renderPublicSets(app) {
       }
 
       const myId = getPublisherId();
-      const cards = snapshot.docs.map(doc => {
-        const d = doc.data();
-        const isOwn = d.publisherId === myId;
+      const list = data.map(d => {
+        const isOwn = d.publisher_id === myId;
         return `
           <div class="public-set-card">
             <div class="public-set-info">
               <div class="set-card-title">${escHtml(d.name)}</div>
               ${d.description ? `<div class="set-card-desc">${escHtml(d.description)}</div>` : ''}
               <div style="display:flex;gap:.5rem;align-items:center;margin-top:.4rem;flex-wrap:wrap">
-                <span class="badge badge-count">${d.cardCount} card${d.cardCount !== 1 ? 's' : ''}</span>
+                <span class="badge badge-count">${d.card_count} card${d.card_count !== 1 ? 's' : ''}</span>
                 <span class="badge badge-public">🌐 Public</span>
                 ${isOwn ? '<span class="badge" style="background:var(--primary-light);color:var(--primary-dark)">Your set</span>' : ''}
               </div>
@@ -399,7 +406,7 @@ function renderPublicSets(app) {
           </div>`;
       }).join('');
 
-      body.innerHTML = `<div class="public-sets-list">${cards}</div>`;
+      body.innerHTML = `<div class="public-sets-list">${list}</div>`;
     })
     .catch(err => {
       const body = document.getElementById('public-sets-body');
@@ -407,7 +414,7 @@ function renderPublicSets(app) {
         <div class="empty-state">
           <div style="font-size:2.5rem">⚠️</div>
           <h2>Couldn't load sets</h2>
-          <p>${escHtml(err.message)}</p>
+          <p>${escHtml(String(err.message || err))}</p>
           <button class="btn btn-ghost" onclick="navigate('public')">Retry</button>
         </div>`;
     });
