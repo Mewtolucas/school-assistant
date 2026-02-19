@@ -27,8 +27,8 @@
    3. Go to Settings → API → copy Project URL and anon public key
    4. Paste them below.
    ═══════════════════════════════════════════════════════════ */
-const SUPABASE_URL      = 'YOUR_SUPABASE_URL';       // e.g. https://xyzxyz.supabase.co
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';  // long JWT string
+const SUPABASE_URL      = 'https://hnpupbwofufczkugetct.supabase.co';       // e.g. https://xyzxyz.supabase.co
+const SUPABASE_ANON_KEY = 'sb_publishable_dcddsZ2cGj73qlUfh-kOtA_P0Ss5wQ0';  // long JWT string
 
 let _db = null;
 function getDb() {
