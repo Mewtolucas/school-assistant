@@ -4,6 +4,68 @@
    ──────────────────────────────────────────────────────────── */
 
 /* ═══════════════════════════════════════════════════════════
+   FIREBASE CONFIG
+   ─────────────────────────────────────────────────────────
+   To enable the community Public Sets page:
+   1. Go to https://console.firebase.google.com
+   2. Create a project → Add a web app → copy firebaseConfig
+   3. In Firestore Database → Rules, set:
+        allow read: if true;
+        allow write: if true;
+      (or tighten rules once happy)
+   4. Replace the values below with your own config.
+   ═══════════════════════════════════════════════════════════ */
+const FIREBASE_CONFIG = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID",
+};
+
+let _db = null;
+function getDb() {
+  if (_db) return _db;
+  try {
+    if (FIREBASE_CONFIG.apiKey === 'YOUR_API_KEY') return null;
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    _db = firebase.firestore();
+  } catch (e) { _db = null; }
+  return _db;
+}
+
+// Returns a stable anonymous ID for this browser session
+function getPublisherId() {
+  let id = localStorage.getItem('sf_publisher_id');
+  if (!id) { id = uid(); localStorage.setItem('sf_publisher_id', id); }
+  return id;
+}
+
+async function publishSetToCloud(set) {
+  const db = getDb();
+  if (!db) return;
+  try {
+    await db.collection('publicSets').doc(`${getPublisherId()}_${set.id}`).set({
+      name:        set.name,
+      description: set.description || '',
+      cardCount:   set.cards.length,
+      encoded:     encodeSet(set),
+      publisherId: getPublisherId(),
+      publishedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) { console.warn('Failed to publish set:', e); }
+}
+
+async function unpublishSetFromCloud(setId) {
+  const db = getDb();
+  if (!db) return;
+  try {
+    await db.collection('publicSets').doc(`${getPublisherId()}_${setId}`).delete();
+  } catch (e) { console.warn('Failed to unpublish set:', e); }
+}
+
+/* ═══════════════════════════════════════════════════════════
    DATA LAYER  (localStorage)
    ═══════════════════════════════════════════════════════════ */
 const DB = (() => {
@@ -266,60 +328,89 @@ function renderHome(app) {
    PUBLIC SETS VIEW
    ═══════════════════════════════════════════════════════════ */
 function renderPublicSets(app) {
-  const sets = DB.getSets().filter(s => s.isPublic);
+  const db = getDb();
 
   app.innerHTML = `
     <div class="home-header">
       <div>
-        <h1>Public Sets</h1>
-        <p>Sets you've made public — share these links with others</p>
+        <h1>Community Sets</h1>
+        <p>Flashcard sets shared by everyone — import any set to start studying</p>
       </div>
       <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
+    </div>
+    <div id="public-sets-body">
+      <div class="public-loading">
+        <div class="public-spinner"></div>
+        Loading sets…
+      </div>
     </div>`;
 
-  if (sets.length === 0) {
-    app.innerHTML += `
+  if (!db) {
+    document.getElementById('public-sets-body').innerHTML = `
       <div class="empty-state">
-        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="2" y1="12" x2="22" y2="12"/>
-          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-        </svg>
-        <h2>No public sets yet</h2>
-        <p>Edit a set and turn on <strong>Make Public</strong> to generate a shareable link.</p>
-        <button class="btn btn-primary btn-lg" onclick="navigate('home')">← Back to My Sets</button>
+        <div style="font-size:2.5rem">🔧</div>
+        <h2>Firebase not configured</h2>
+        <p>Add your Firebase project config to <code>app.js</code> to enable community sets.</p>
+        <button class="btn btn-ghost btn-lg" onclick="navigate('home')">← Back</button>
       </div>`;
     return;
   }
 
-  const list = sets.map(set => {
-    const url = shareUrl(set);
-    const mastery = DB.getMastery(set);
-    return `
-      <div class="public-set-card">
-        <div class="public-set-info">
-          <div class="set-card-title">${escHtml(set.name)}</div>
-          ${set.description ? `<div class="set-card-desc">${escHtml(set.description)}</div>` : ''}
-          <div style="display:flex;gap:.5rem;align-items:center;margin-top:.4rem;flex-wrap:wrap">
-            <span class="badge badge-count">${set.cards.length} card${set.cards.length !== 1 ? 's' : ''}</span>
-            <span class="badge badge-public">🌐 Public</span>
-            <span style="font-size:.75rem;color:var(--text-muted)">Mastery: ${mastery}%</span>
-          </div>
-        </div>
-        <div class="public-set-url-row">
-          <input class="public-share-input" type="text" readonly value="${escAttr(url)}" onclick="this.select()" />
-          <button class="btn btn-outline btn-sm" onclick="copyPublicUrl(this,'${escAttr(url)}')">Copy</button>
-        </div>
-        <div class="public-set-actions">
-          <button class="btn btn-primary btn-sm" onclick="navigate('study/${set.id}')">Study</button>
-          <button class="btn btn-outline btn-sm" onclick="navigate('quiz/${set.id}')">Quiz</button>
-          <button class="btn btn-outline btn-sm" onclick="navigate('written/${set.id}')">Written</button>
-          <button class="btn btn-ghost btn-sm" onclick="navigate('edit/${set.id}')">Edit</button>
-        </div>
-      </div>`;
-  }).join('');
+  db.collection('publicSets')
+    .orderBy('publishedAt', 'desc')
+    .limit(50)
+    .get()
+    .then(snapshot => {
+      const body = document.getElementById('public-sets-body');
+      if (!body) return;
 
-  app.innerHTML += `<div class="public-sets-list">${list}</div>`;
+      if (snapshot.empty) {
+        body.innerHTML = `
+          <div class="empty-state">
+            <div style="font-size:2.5rem">📭</div>
+            <h2>No community sets yet</h2>
+            <p>Be the first! Create a set, turn on <strong>Make Public</strong>, and save it.</p>
+            <button class="btn btn-primary btn-lg" onclick="navigate('create')">Create a Set</button>
+          </div>`;
+        return;
+      }
+
+      const myId = getPublisherId();
+      const cards = snapshot.docs.map(doc => {
+        const d = doc.data();
+        const isOwn = d.publisherId === myId;
+        return `
+          <div class="public-set-card">
+            <div class="public-set-info">
+              <div class="set-card-title">${escHtml(d.name)}</div>
+              ${d.description ? `<div class="set-card-desc">${escHtml(d.description)}</div>` : ''}
+              <div style="display:flex;gap:.5rem;align-items:center;margin-top:.4rem;flex-wrap:wrap">
+                <span class="badge badge-count">${d.cardCount} card${d.cardCount !== 1 ? 's' : ''}</span>
+                <span class="badge badge-public">🌐 Public</span>
+                ${isOwn ? '<span class="badge" style="background:var(--primary-light);color:var(--primary-dark)">Your set</span>' : ''}
+              </div>
+            </div>
+            <div class="public-set-actions">
+              <button class="btn btn-primary btn-sm" onclick="studyShared('${escAttr(d.encoded)}')">Study</button>
+              <button class="btn btn-outline btn-sm" onclick="quizShared('${escAttr(d.encoded)}')">Quiz</button>
+              <button class="btn btn-outline btn-sm" onclick="writtenShared('${escAttr(d.encoded)}')">Written</button>
+              <button class="btn btn-ghost btn-sm" onclick="importSharedSet('${escAttr(d.encoded)}')">⬇ Import</button>
+            </div>
+          </div>`;
+      }).join('');
+
+      body.innerHTML = `<div class="public-sets-list">${cards}</div>`;
+    })
+    .catch(err => {
+      const body = document.getElementById('public-sets-body');
+      if (body) body.innerHTML = `
+        <div class="empty-state">
+          <div style="font-size:2.5rem">⚠️</div>
+          <h2>Couldn't load sets</h2>
+          <p>${escHtml(err.message)}</p>
+          <button class="btn btn-ghost" onclick="navigate('public')">Retry</button>
+        </div>`;
+    });
 }
 
 window.copyPublicUrl = function(btn, url) {
@@ -447,10 +538,13 @@ window.saveSet = function(setId) {
   }
 
   if (setId) {
-    DB.updateSet(setId, { name, description: desc, cards, isPublic });
+    const updated = DB.updateSet(setId, { name, description: desc, cards, isPublic });
+    if (isPublic) publishSetToCloud(updated);
+    else unpublishSetFromCloud(setId);
     showToast('Set updated!');
   } else {
-    DB.createSet({ name, description: desc, cards, isPublic });
+    const created = DB.createSet({ name, description: desc, cards, isPublic });
+    if (isPublic) publishSetToCloud(created);
     showToast('Set created!');
   }
   navigate('home');
@@ -1136,6 +1230,13 @@ window.quizShared = function(encoded) {
   navigate(`quiz/${set.id}`);
 };
 
+window.writtenShared = function(encoded) {
+  const shared = decodeSet(encoded);
+  if (!shared) return;
+  const set = DB.createSet({ name: shared.name, description: shared.description || '', cards: shared.cards, isPublic: false });
+  navigate(`written/${set.id}`);
+};
+
 /* ═══════════════════════════════════════════════════════════
    SHARE MODAL
    ═══════════════════════════════════════════════════════════ */
@@ -1174,6 +1275,7 @@ window.openDeleteModal = function(setId, name) {
   document.getElementById('delete-set-name').textContent = name;
   document.getElementById('delete-overlay').classList.remove('hidden');
   document.getElementById('confirm-delete-btn').onclick = function() {
+    unpublishSetFromCloud(pendingDeleteId);
     DB.deleteSet(pendingDeleteId);
     closeDeleteModal();
     navigate('home');

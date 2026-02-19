@@ -603,6 +603,21 @@ textarea { min-height: 240px; font-family: 'SF Mono', 'Consolas', monospace; fon
 
 .public-set-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
 
+.public-loading {
+  display: flex; align-items: center; justify-content: center; gap: .75rem;
+  padding: 4rem 2rem;
+  color: var(--text-muted); font-size: .95rem;
+}
+.public-spinner {
+  width: 22px; height: 22px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ── Written quiz ──────────────────────────────────────── */
 .written-input-wrap {
   display: flex; flex-direction: column; gap: .75rem;
