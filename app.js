@@ -355,8 +355,8 @@ function renderPublicSets(app) {
     document.getElementById('public-sets-body').innerHTML = `
       <div class="empty-state">
         <div style="font-size:2.5rem">🔧</div>
-        <h2>Firebase not configured</h2>
-        <p>Add your Firebase project config to <code>app.js</code> to enable community sets.</p>
+        <h2>Supabase not configured</h2>
+        <p>Add your Supabase project URL and anon key to <code>app.js</code> to enable community sets.</p>
         <button class="btn btn-ghost btn-lg" onclick="navigate('home')">← Back</button>
       </div>`;
     return;
