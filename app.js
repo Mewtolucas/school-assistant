@@ -238,15 +238,24 @@ function render() {
   app.innerHTML = '';
 
   switch (view) {
-    case 'home':    renderHome(app);             break;
-    case 'public':  renderPublicSets(app);       break;
-    case 'create':  renderCreate(app, null);     break;
-    case 'edit':    renderCreate(app, param);    break;
-    case 'study':   renderStudy(app, param);        break;
-    case 'quiz':    renderQuiz(app, param);         break;
-    case 'written': renderWrittenQuiz(app, param);  break;
-    case 'shared':  renderShared(app, param);       break;
-    default:        renderHome(app);
+    case 'home':      renderHome(app);                break;
+    case 'public':    renderPublicSets(app);          break;
+    case 'create':    renderCreate(app, null);        break;
+    case 'edit':      renderCreate(app, param);       break;
+    case 'study':     renderStudy(app, param);        break;
+    case 'quiz':      renderQuiz(app, param);         break;
+    case 'written':   renderWrittenQuiz(app, param);  break;
+    case 'shared':    renderShared(app, param);       break;
+    case 'tools':     renderToolsHub(app);            break;
+    case 'geo':       renderGeoHub(app);              break;
+    case 'geo-quiz':  renderGeoQuiz(app, param);      break;
+    case 'math':      renderMathHub(app);             break;
+    case 'math-quiz': renderMathQuiz(app, param);     break;
+    case 'language':  renderLanguageHub(app);         break;
+    case 'lang-quiz': renderLangQuiz(app, param);     break;
+    case 'elements':  param ? renderPeriodicQuiz(app, param) : renderPeriodicHub(app); break;
+    case 'essay':     renderEssayGrader(app);         break;
+    default:          renderHome(app);
   }
 }
 
@@ -1329,4 +1338,1109 @@ function shuffle(arr) {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STUDY TOOLS — DATA
+   ═══════════════════════════════════════════════════════════ */
+
+const WORLD_CAPITALS = [
+  {country:'United States',capital:'Washington D.C.',continent:'North America',flag:'🇺🇸'},
+  {country:'Canada',capital:'Ottawa',continent:'North America',flag:'🇨🇦'},
+  {country:'Mexico',capital:'Mexico City',continent:'North America',flag:'🇲🇽'},
+  {country:'Cuba',capital:'Havana',continent:'North America',flag:'🇨🇺'},
+  {country:'Jamaica',capital:'Kingston',continent:'North America',flag:'🇯🇲'},
+  {country:'Haiti',capital:'Port-au-Prince',continent:'North America',flag:'🇭🇹'},
+  {country:'Dominican Republic',capital:'Santo Domingo',continent:'North America',flag:'🇩🇴'},
+  {country:'Guatemala',capital:'Guatemala City',continent:'North America',flag:'🇬🇹'},
+  {country:'Honduras',capital:'Tegucigalpa',continent:'North America',flag:'🇭🇳'},
+  {country:'Costa Rica',capital:'San José',continent:'North America',flag:'🇨🇷'},
+  {country:'Panama',capital:'Panama City',continent:'North America',flag:'🇵🇦'},
+  {country:'Brazil',capital:'Brasília',continent:'South America',flag:'🇧🇷'},
+  {country:'Argentina',capital:'Buenos Aires',continent:'South America',flag:'🇦🇷'},
+  {country:'Chile',capital:'Santiago',continent:'South America',flag:'🇨🇱'},
+  {country:'Colombia',capital:'Bogotá',continent:'South America',flag:'🇨🇴'},
+  {country:'Peru',capital:'Lima',continent:'South America',flag:'🇵🇪'},
+  {country:'Venezuela',capital:'Caracas',continent:'South America',flag:'🇻🇪'},
+  {country:'Ecuador',capital:'Quito',continent:'South America',flag:'🇪🇨'},
+  {country:'Bolivia',capital:'Sucre',continent:'South America',flag:'🇧🇴'},
+  {country:'Uruguay',capital:'Montevideo',continent:'South America',flag:'🇺🇾'},
+  {country:'Paraguay',capital:'Asunción',continent:'South America',flag:'🇵🇾'},
+  {country:'United Kingdom',capital:'London',continent:'Europe',flag:'🇬🇧'},
+  {country:'France',capital:'Paris',continent:'Europe',flag:'🇫🇷'},
+  {country:'Germany',capital:'Berlin',continent:'Europe',flag:'🇩🇪'},
+  {country:'Italy',capital:'Rome',continent:'Europe',flag:'🇮🇹'},
+  {country:'Spain',capital:'Madrid',continent:'Europe',flag:'🇪🇸'},
+  {country:'Portugal',capital:'Lisbon',continent:'Europe',flag:'🇵🇹'},
+  {country:'Netherlands',capital:'Amsterdam',continent:'Europe',flag:'🇳🇱'},
+  {country:'Belgium',capital:'Brussels',continent:'Europe',flag:'🇧🇪'},
+  {country:'Switzerland',capital:'Bern',continent:'Europe',flag:'🇨🇭'},
+  {country:'Austria',capital:'Vienna',continent:'Europe',flag:'🇦🇹'},
+  {country:'Poland',capital:'Warsaw',continent:'Europe',flag:'🇵🇱'},
+  {country:'Czech Republic',capital:'Prague',continent:'Europe',flag:'🇨🇿'},
+  {country:'Hungary',capital:'Budapest',continent:'Europe',flag:'🇭🇺'},
+  {country:'Romania',capital:'Bucharest',continent:'Europe',flag:'🇷🇴'},
+  {country:'Greece',capital:'Athens',continent:'Europe',flag:'🇬🇷'},
+  {country:'Sweden',capital:'Stockholm',continent:'Europe',flag:'🇸🇪'},
+  {country:'Norway',capital:'Oslo',continent:'Europe',flag:'🇳🇴'},
+  {country:'Denmark',capital:'Copenhagen',continent:'Europe',flag:'🇩🇰'},
+  {country:'Finland',capital:'Helsinki',continent:'Europe',flag:'🇫🇮'},
+  {country:'Russia',capital:'Moscow',continent:'Europe',flag:'🇷🇺'},
+  {country:'Ukraine',capital:'Kyiv',continent:'Europe',flag:'🇺🇦'},
+  {country:'Turkey',capital:'Ankara',continent:'Europe',flag:'🇹🇷'},
+  {country:'Croatia',capital:'Zagreb',continent:'Europe',flag:'🇭🇷'},
+  {country:'Serbia',capital:'Belgrade',continent:'Europe',flag:'🇷🇸'},
+  {country:'Ireland',capital:'Dublin',continent:'Europe',flag:'🇮🇪'},
+  {country:'Slovakia',capital:'Bratislava',continent:'Europe',flag:'🇸🇰'},
+  {country:'Bulgaria',capital:'Sofia',continent:'Europe',flag:'🇧🇬'},
+  {country:'China',capital:'Beijing',continent:'Asia',flag:'🇨🇳'},
+  {country:'Japan',capital:'Tokyo',continent:'Asia',flag:'🇯🇵'},
+  {country:'South Korea',capital:'Seoul',continent:'Asia',flag:'🇰🇷'},
+  {country:'North Korea',capital:'Pyongyang',continent:'Asia',flag:'🇰🇵'},
+  {country:'India',capital:'New Delhi',continent:'Asia',flag:'🇮🇳'},
+  {country:'Pakistan',capital:'Islamabad',continent:'Asia',flag:'🇵🇰'},
+  {country:'Bangladesh',capital:'Dhaka',continent:'Asia',flag:'🇧🇩'},
+  {country:'Indonesia',capital:'Jakarta',continent:'Asia',flag:'🇮🇩'},
+  {country:'Philippines',capital:'Manila',continent:'Asia',flag:'🇵🇭'},
+  {country:'Vietnam',capital:'Hanoi',continent:'Asia',flag:'🇻🇳'},
+  {country:'Thailand',capital:'Bangkok',continent:'Asia',flag:'🇹🇭'},
+  {country:'Malaysia',capital:'Kuala Lumpur',continent:'Asia',flag:'🇲🇾'},
+  {country:'Myanmar',capital:'Naypyidaw',continent:'Asia',flag:'🇲🇲'},
+  {country:'Saudi Arabia',capital:'Riyadh',continent:'Asia',flag:'🇸🇦'},
+  {country:'Iran',capital:'Tehran',continent:'Asia',flag:'🇮🇷'},
+  {country:'Iraq',capital:'Baghdad',continent:'Asia',flag:'🇮🇶'},
+  {country:'Israel',capital:'Jerusalem',continent:'Asia',flag:'🇮🇱'},
+  {country:'Jordan',capital:'Amman',continent:'Asia',flag:'🇯🇴'},
+  {country:'UAE',capital:'Abu Dhabi',continent:'Asia',flag:'🇦🇪'},
+  {country:'Kazakhstan',capital:'Astana',continent:'Asia',flag:'🇰🇿'},
+  {country:'Afghanistan',capital:'Kabul',continent:'Asia',flag:'🇦🇫'},
+  {country:'Nepal',capital:'Kathmandu',continent:'Asia',flag:'🇳🇵'},
+  {country:'Mongolia',capital:'Ulaanbaatar',continent:'Asia',flag:'🇲🇳'},
+  {country:'Cambodia',capital:'Phnom Penh',continent:'Asia',flag:'🇰🇭'},
+  {country:'Laos',capital:'Vientiane',continent:'Asia',flag:'🇱🇦'},
+  {country:'Sri Lanka',capital:'Sri Jayawardenepura Kotte',continent:'Asia',flag:'🇱🇰'},
+  {country:'Taiwan',capital:'Taipei',continent:'Asia',flag:'🇹🇼'},
+  {country:'Singapore',capital:'Singapore',continent:'Asia',flag:'🇸🇬'},
+  {country:'Egypt',capital:'Cairo',continent:'Africa',flag:'🇪🇬'},
+  {country:'Nigeria',capital:'Abuja',continent:'Africa',flag:'🇳🇬'},
+  {country:'South Africa',capital:'Pretoria',continent:'Africa',flag:'🇿🇦'},
+  {country:'Kenya',capital:'Nairobi',continent:'Africa',flag:'🇰🇪'},
+  {country:'Ethiopia',capital:'Addis Ababa',continent:'Africa',flag:'🇪🇹'},
+  {country:'Ghana',capital:'Accra',continent:'Africa',flag:'🇬🇭'},
+  {country:'Tanzania',capital:'Dodoma',continent:'Africa',flag:'🇹🇿'},
+  {country:'Morocco',capital:'Rabat',continent:'Africa',flag:'🇲🇦'},
+  {country:'Algeria',capital:'Algiers',continent:'Africa',flag:'🇩🇿'},
+  {country:'Sudan',capital:'Khartoum',continent:'Africa',flag:'🇸🇩'},
+  {country:'Libya',capital:'Tripoli',continent:'Africa',flag:'🇱🇾'},
+  {country:'Senegal',capital:'Dakar',continent:'Africa',flag:'🇸🇳'},
+  {country:'Cameroon',capital:'Yaoundé',continent:'Africa',flag:'🇨🇲'},
+  {country:'Angola',capital:'Luanda',continent:'Africa',flag:'🇦🇴'},
+  {country:'Mozambique',capital:'Maputo',continent:'Africa',flag:'🇲🇿'},
+  {country:'Madagascar',capital:'Antananarivo',continent:'Africa',flag:'🇲🇬'},
+  {country:'Zimbabwe',capital:'Harare',continent:'Africa',flag:'🇿🇼'},
+  {country:'Uganda',capital:'Kampala',continent:'Africa',flag:'🇺🇬'},
+  {country:'Rwanda',capital:'Kigali',continent:'Africa',flag:'🇷🇼'},
+  {country:'Tunisia',capital:'Tunis',continent:'Africa',flag:'🇹🇳'},
+  {country:'Australia',capital:'Canberra',continent:'Oceania',flag:'🇦🇺'},
+  {country:'New Zealand',capital:'Wellington',continent:'Oceania',flag:'🇳🇿'},
+  {country:'Papua New Guinea',capital:'Port Moresby',continent:'Oceania',flag:'🇵🇬'},
+  {country:'Fiji',capital:'Suva',continent:'Oceania',flag:'🇫🇯'},
+];
+
+const US_STATES = [
+  {state:'Alabama',capital:'Montgomery',abbr:'AL'},
+  {state:'Alaska',capital:'Juneau',abbr:'AK'},
+  {state:'Arizona',capital:'Phoenix',abbr:'AZ'},
+  {state:'Arkansas',capital:'Little Rock',abbr:'AR'},
+  {state:'California',capital:'Sacramento',abbr:'CA'},
+  {state:'Colorado',capital:'Denver',abbr:'CO'},
+  {state:'Connecticut',capital:'Hartford',abbr:'CT'},
+  {state:'Delaware',capital:'Dover',abbr:'DE'},
+  {state:'Florida',capital:'Tallahassee',abbr:'FL'},
+  {state:'Georgia',capital:'Atlanta',abbr:'GA'},
+  {state:'Hawaii',capital:'Honolulu',abbr:'HI'},
+  {state:'Idaho',capital:'Boise',abbr:'ID'},
+  {state:'Illinois',capital:'Springfield',abbr:'IL'},
+  {state:'Indiana',capital:'Indianapolis',abbr:'IN'},
+  {state:'Iowa',capital:'Des Moines',abbr:'IA'},
+  {state:'Kansas',capital:'Topeka',abbr:'KS'},
+  {state:'Kentucky',capital:'Frankfort',abbr:'KY'},
+  {state:'Louisiana',capital:'Baton Rouge',abbr:'LA'},
+  {state:'Maine',capital:'Augusta',abbr:'ME'},
+  {state:'Maryland',capital:'Annapolis',abbr:'MD'},
+  {state:'Massachusetts',capital:'Boston',abbr:'MA'},
+  {state:'Michigan',capital:'Lansing',abbr:'MI'},
+  {state:'Minnesota',capital:'Saint Paul',abbr:'MN'},
+  {state:'Mississippi',capital:'Jackson',abbr:'MS'},
+  {state:'Missouri',capital:'Jefferson City',abbr:'MO'},
+  {state:'Montana',capital:'Helena',abbr:'MT'},
+  {state:'Nebraska',capital:'Lincoln',abbr:'NE'},
+  {state:'Nevada',capital:'Carson City',abbr:'NV'},
+  {state:'New Hampshire',capital:'Concord',abbr:'NH'},
+  {state:'New Jersey',capital:'Trenton',abbr:'NJ'},
+  {state:'New Mexico',capital:'Santa Fe',abbr:'NM'},
+  {state:'New York',capital:'Albany',abbr:'NY'},
+  {state:'North Carolina',capital:'Raleigh',abbr:'NC'},
+  {state:'North Dakota',capital:'Bismarck',abbr:'ND'},
+  {state:'Ohio',capital:'Columbus',abbr:'OH'},
+  {state:'Oklahoma',capital:'Oklahoma City',abbr:'OK'},
+  {state:'Oregon',capital:'Salem',abbr:'OR'},
+  {state:'Pennsylvania',capital:'Harrisburg',abbr:'PA'},
+  {state:'Rhode Island',capital:'Providence',abbr:'RI'},
+  {state:'South Carolina',capital:'Columbia',abbr:'SC'},
+  {state:'South Dakota',capital:'Pierre',abbr:'SD'},
+  {state:'Tennessee',capital:'Nashville',abbr:'TN'},
+  {state:'Texas',capital:'Austin',abbr:'TX'},
+  {state:'Utah',capital:'Salt Lake City',abbr:'UT'},
+  {state:'Vermont',capital:'Montpelier',abbr:'VT'},
+  {state:'Virginia',capital:'Richmond',abbr:'VA'},
+  {state:'Washington',capital:'Olympia',abbr:'WA'},
+  {state:'West Virginia',capital:'Charleston',abbr:'WV'},
+  {state:'Wisconsin',capital:'Madison',abbr:'WI'},
+  {state:'Wyoming',capital:'Cheyenne',abbr:'WY'},
+];
+
+const PERIODIC_ELEMENTS = [
+  {number:1,symbol:'H',name:'Hydrogen',mass:'1.008'},
+  {number:2,symbol:'He',name:'Helium',mass:'4.003'},
+  {number:3,symbol:'Li',name:'Lithium',mass:'6.941'},
+  {number:4,symbol:'Be',name:'Beryllium',mass:'9.012'},
+  {number:5,symbol:'B',name:'Boron',mass:'10.81'},
+  {number:6,symbol:'C',name:'Carbon',mass:'12.01'},
+  {number:7,symbol:'N',name:'Nitrogen',mass:'14.01'},
+  {number:8,symbol:'O',name:'Oxygen',mass:'16.00'},
+  {number:9,symbol:'F',name:'Fluorine',mass:'19.00'},
+  {number:10,symbol:'Ne',name:'Neon',mass:'20.18'},
+  {number:11,symbol:'Na',name:'Sodium',mass:'22.99'},
+  {number:12,symbol:'Mg',name:'Magnesium',mass:'24.31'},
+  {number:13,symbol:'Al',name:'Aluminum',mass:'26.98'},
+  {number:14,symbol:'Si',name:'Silicon',mass:'28.09'},
+  {number:15,symbol:'P',name:'Phosphorus',mass:'30.97'},
+  {number:16,symbol:'S',name:'Sulfur',mass:'32.07'},
+  {number:17,symbol:'Cl',name:'Chlorine',mass:'35.45'},
+  {number:18,symbol:'Ar',name:'Argon',mass:'39.95'},
+  {number:19,symbol:'K',name:'Potassium',mass:'39.10'},
+  {number:20,symbol:'Ca',name:'Calcium',mass:'40.08'},
+  {number:26,symbol:'Fe',name:'Iron',mass:'55.85'},
+  {number:29,symbol:'Cu',name:'Copper',mass:'63.55'},
+  {number:30,symbol:'Zn',name:'Zinc',mass:'65.38'},
+  {number:35,symbol:'Br',name:'Bromine',mass:'79.90'},
+  {number:36,symbol:'Kr',name:'Krypton',mass:'83.80'},
+  {number:47,symbol:'Ag',name:'Silver',mass:'107.87'},
+  {number:50,symbol:'Sn',name:'Tin',mass:'118.71'},
+  {number:53,symbol:'I',name:'Iodine',mass:'126.90'},
+  {number:54,symbol:'Xe',name:'Xenon',mass:'131.29'},
+  {number:79,symbol:'Au',name:'Gold',mass:'196.97'},
+  {number:80,symbol:'Hg',name:'Mercury',mass:'200.59'},
+  {number:82,symbol:'Pb',name:'Lead',mass:'207.2'},
+  {number:92,symbol:'U',name:'Uranium',mass:'238.03'},
+];
+
+const SPANISH_VERBS = [
+  {infinitive:'hablar',english:'to speak',
+   present:{yo:'hablo','tú':'hablas','él/ella':'habla',nosotros:'hablamos',vosotros:'habláis','ellos/ellas':'hablan'},
+   preterite:{yo:'hablé','tú':'hablaste','él/ella':'habló',nosotros:'hablamos',vosotros:'hablasteis','ellos/ellas':'hablaron'}},
+  {infinitive:'comer',english:'to eat',
+   present:{yo:'como','tú':'comes','él/ella':'come',nosotros:'comemos',vosotros:'coméis','ellos/ellas':'comen'},
+   preterite:{yo:'comí','tú':'comiste','él/ella':'comió',nosotros:'comimos',vosotros:'comisteis','ellos/ellas':'comieron'}},
+  {infinitive:'vivir',english:'to live',
+   present:{yo:'vivo','tú':'vives','él/ella':'vive',nosotros:'vivimos',vosotros:'vivís','ellos/ellas':'viven'},
+   preterite:{yo:'viví','tú':'viviste','él/ella':'vivió',nosotros:'vivimos',vosotros:'vivisteis','ellos/ellas':'vivieron'}},
+  {infinitive:'ser',english:'to be (permanent)',
+   present:{yo:'soy','tú':'eres','él/ella':'es',nosotros:'somos',vosotros:'sois','ellos/ellas':'son'},
+   preterite:{yo:'fui','tú':'fuiste','él/ella':'fue',nosotros:'fuimos',vosotros:'fuisteis','ellos/ellas':'fueron'}},
+  {infinitive:'estar',english:'to be (temporary)',
+   present:{yo:'estoy','tú':'estás','él/ella':'está',nosotros:'estamos',vosotros:'estáis','ellos/ellas':'están'},
+   preterite:{yo:'estuve','tú':'estuviste','él/ella':'estuvo',nosotros:'estuvimos',vosotros:'estuvisteis','ellos/ellas':'estuvieron'}},
+  {infinitive:'tener',english:'to have',
+   present:{yo:'tengo','tú':'tienes','él/ella':'tiene',nosotros:'tenemos',vosotros:'tenéis','ellos/ellas':'tienen'},
+   preterite:{yo:'tuve','tú':'tuviste','él/ella':'tuvo',nosotros:'tuvimos',vosotros:'tuvisteis','ellos/ellas':'tuvieron'}},
+  {infinitive:'hacer',english:'to do/make',
+   present:{yo:'hago','tú':'haces','él/ella':'hace',nosotros:'hacemos',vosotros:'hacéis','ellos/ellas':'hacen'},
+   preterite:{yo:'hice','tú':'hiciste','él/ella':'hizo',nosotros:'hicimos',vosotros:'hicisteis','ellos/ellas':'hicieron'}},
+  {infinitive:'ir',english:'to go',
+   present:{yo:'voy','tú':'vas','él/ella':'va',nosotros:'vamos',vosotros:'vais','ellos/ellas':'van'},
+   preterite:{yo:'fui','tú':'fuiste','él/ella':'fue',nosotros:'fuimos',vosotros:'fuisteis','ellos/ellas':'fueron'}},
+  {infinitive:'poder',english:'to be able to',
+   present:{yo:'puedo','tú':'puedes','él/ella':'puede',nosotros:'podemos',vosotros:'podéis','ellos/ellas':'pueden'},
+   preterite:{yo:'pude','tú':'pudiste','él/ella':'pudo',nosotros:'pudimos',vosotros:'pudisteis','ellos/ellas':'pudieron'}},
+  {infinitive:'querer',english:'to want/love',
+   present:{yo:'quiero','tú':'quieres','él/ella':'quiere',nosotros:'queremos',vosotros:'queréis','ellos/ellas':'quieren'},
+   preterite:{yo:'quise','tú':'quisiste','él/ella':'quiso',nosotros:'quisimos',vosotros:'quisisteis','ellos/ellas':'quisieron'}},
+  {infinitive:'venir',english:'to come',
+   present:{yo:'vengo','tú':'vienes','él/ella':'viene',nosotros:'venimos',vosotros:'venís','ellos/ellas':'vienen'},
+   preterite:{yo:'vine','tú':'viniste','él/ella':'vino',nosotros:'vinimos',vosotros:'vinisteis','ellos/ellas':'vinieron'}},
+  {infinitive:'dar',english:'to give',
+   present:{yo:'doy','tú':'das','él/ella':'da',nosotros:'damos',vosotros:'dais','ellos/ellas':'dan'},
+   preterite:{yo:'di','tú':'diste','él/ella':'dio',nosotros:'dimos',vosotros:'disteis','ellos/ellas':'dieron'}},
+  {infinitive:'saber',english:'to know (facts)',
+   present:{yo:'sé','tú':'sabes','él/ella':'sabe',nosotros:'sabemos',vosotros:'sabéis','ellos/ellas':'saben'},
+   preterite:{yo:'supe','tú':'supiste','él/ella':'supo',nosotros:'supimos',vosotros:'supisteis','ellos/ellas':'supieron'}},
+  {infinitive:'ver',english:'to see',
+   present:{yo:'veo','tú':'ves','él/ella':'ve',nosotros:'vemos',vosotros:'veis','ellos/ellas':'ven'},
+   preterite:{yo:'vi','tú':'viste','él/ella':'vio',nosotros:'vimos',vosotros:'visteis','ellos/ellas':'vieron'}},
+  {infinitive:'poner',english:'to put/place',
+   present:{yo:'pongo','tú':'pones','él/ella':'pone',nosotros:'ponemos',vosotros:'ponéis','ellos/ellas':'ponen'},
+   preterite:{yo:'puse','tú':'pusiste','él/ella':'puso',nosotros:'pusimos',vosotros:'pusisteis','ellos/ellas':'pusieron'}},
+];
+
+const SPANISH_VOCAB = {
+  'Colors':[
+    {es:'rojo',en:'red'},{es:'azul',en:'blue'},{es:'verde',en:'green'},
+    {es:'amarillo',en:'yellow'},{es:'blanco',en:'white'},{es:'negro',en:'black'},
+    {es:'naranja',en:'orange'},{es:'morado',en:'purple'},{es:'rosa',en:'pink'},
+    {es:'gris',en:'gray'},{es:'marrón',en:'brown'},
+  ],
+  'Numbers 1–20':[
+    {es:'uno',en:'one'},{es:'dos',en:'two'},{es:'tres',en:'three'},
+    {es:'cuatro',en:'four'},{es:'cinco',en:'five'},{es:'seis',en:'six'},
+    {es:'siete',en:'seven'},{es:'ocho',en:'eight'},{es:'nueve',en:'nine'},
+    {es:'diez',en:'ten'},{es:'once',en:'eleven'},{es:'doce',en:'twelve'},
+    {es:'trece',en:'thirteen'},{es:'catorce',en:'fourteen'},{es:'quince',en:'fifteen'},
+    {es:'dieciséis',en:'sixteen'},{es:'diecisiete',en:'seventeen'},{es:'dieciocho',en:'eighteen'},
+    {es:'diecinueve',en:'nineteen'},{es:'veinte',en:'twenty'},
+  ],
+  'Family':[
+    {es:'madre',en:'mother'},{es:'padre',en:'father'},{es:'hermano',en:'brother'},
+    {es:'hermana',en:'sister'},{es:'abuelo',en:'grandfather'},{es:'abuela',en:'grandmother'},
+    {es:'hijo',en:'son'},{es:'hija',en:'daughter'},{es:'tío',en:'uncle'},
+    {es:'tía',en:'aunt'},{es:'primo',en:'cousin (m)'},{es:'esposo',en:'husband'},{es:'esposa',en:'wife'},
+  ],
+  'Food':[
+    {es:'manzana',en:'apple'},{es:'pan',en:'bread'},{es:'leche',en:'milk'},
+    {es:'agua',en:'water'},{es:'pollo',en:'chicken'},{es:'carne',en:'meat'},
+    {es:'pescado',en:'fish'},{es:'arroz',en:'rice'},{es:'queso',en:'cheese'},
+    {es:'huevo',en:'egg'},{es:'fruta',en:'fruit'},{es:'café',en:'coffee'},
+    {es:'jugo',en:'juice'},{es:'sopa',en:'soup'},
+  ],
+  'School':[
+    {es:'libro',en:'book'},{es:'lápiz',en:'pencil'},{es:'cuaderno',en:'notebook'},
+    {es:'mesa',en:'table'},{es:'silla',en:'chair'},{es:'pizarra',en:'blackboard'},
+    {es:'maestro',en:'teacher (m)'},{es:'maestra',en:'teacher (f)'},{es:'estudiante',en:'student'},
+    {es:'tarea',en:'homework'},{es:'examen',en:'exam'},{es:'biblioteca',en:'library'},
+    {es:'clase',en:'class'},{es:'escuela',en:'school'},
+  ],
+  'Animals':[
+    {es:'perro',en:'dog'},{es:'gato',en:'cat'},{es:'caballo',en:'horse'},
+    {es:'pájaro',en:'bird'},{es:'vaca',en:'cow'},{es:'cerdo',en:'pig'},
+    {es:'elefante',en:'elephant'},{es:'tigre',en:'tiger'},{es:'león',en:'lion'},
+    {es:'oso',en:'bear'},{es:'conejo',en:'rabbit'},{es:'serpiente',en:'snake'},
+  ],
+};
+
+const FRENCH_VOCAB = {
+  'Colors':[
+    {fr:'rouge',en:'red'},{fr:'bleu',en:'blue'},{fr:'vert',en:'green'},
+    {fr:'jaune',en:'yellow'},{fr:'blanc',en:'white'},{fr:'noir',en:'black'},
+    {fr:'orange',en:'orange'},{fr:'violet',en:'purple'},{fr:'rose',en:'pink'},
+    {fr:'gris',en:'gray'},{fr:'marron',en:'brown'},
+  ],
+  'Numbers 1–20':[
+    {fr:'un',en:'one'},{fr:'deux',en:'two'},{fr:'trois',en:'three'},
+    {fr:'quatre',en:'four'},{fr:'cinq',en:'five'},{fr:'six',en:'six'},
+    {fr:'sept',en:'seven'},{fr:'huit',en:'eight'},{fr:'neuf',en:'nine'},
+    {fr:'dix',en:'ten'},{fr:'onze',en:'eleven'},{fr:'douze',en:'twelve'},
+    {fr:'treize',en:'thirteen'},{fr:'quatorze',en:'fourteen'},{fr:'quinze',en:'fifteen'},
+    {fr:'seize',en:'sixteen'},{fr:'dix-sept',en:'seventeen'},{fr:'dix-huit',en:'eighteen'},
+    {fr:'dix-neuf',en:'nineteen'},{fr:'vingt',en:'twenty'},
+  ],
+  'Family':[
+    {fr:'mère',en:'mother'},{fr:'père',en:'father'},{fr:'frère',en:'brother'},
+    {fr:'sœur',en:'sister'},{fr:'grand-père',en:'grandfather'},{fr:'grand-mère',en:'grandmother'},
+    {fr:'fils',en:'son'},{fr:'fille',en:'daughter'},{fr:'oncle',en:'uncle'},
+    {fr:'tante',en:'aunt'},{fr:'cousin',en:'cousin (m)'},{fr:'mari',en:'husband'},{fr:'femme',en:'wife'},
+  ],
+  'Food':[
+    {fr:'pomme',en:'apple'},{fr:'pain',en:'bread'},{fr:'lait',en:'milk'},
+    {fr:'eau',en:'water'},{fr:'poulet',en:'chicken'},{fr:'viande',en:'meat'},
+    {fr:'poisson',en:'fish'},{fr:'riz',en:'rice'},{fr:'fromage',en:'cheese'},
+    {fr:'œuf',en:'egg'},{fr:'fruit',en:'fruit'},{fr:'café',en:'coffee'},
+    {fr:'jus',en:'juice'},{fr:'soupe',en:'soup'},
+  ],
+  'School':[
+    {fr:'livre',en:'book'},{fr:'crayon',en:'pencil'},{fr:'cahier',en:'notebook'},
+    {fr:'table',en:'table'},{fr:'chaise',en:'chair'},{fr:'tableau',en:'blackboard'},
+    {fr:'professeur',en:'teacher'},{fr:'élève',en:'student'},
+    {fr:'devoir',en:'homework'},{fr:'examen',en:'exam'},{fr:'bibliothèque',en:'library'},
+    {fr:'classe',en:'class'},{fr:'école',en:'school'},
+  ],
+  'Animals':[
+    {fr:'chien',en:'dog'},{fr:'chat',en:'cat'},{fr:'cheval',en:'horse'},
+    {fr:'oiseau',en:'bird'},{fr:'vache',en:'cow'},{fr:'cochon',en:'pig'},
+    {fr:'éléphant',en:'elephant'},{fr:'tigre',en:'tiger'},{fr:'lion',en:'lion'},
+    {fr:'ours',en:'bear'},{fr:'lapin',en:'rabbit'},{fr:'serpent',en:'snake'},
+  ],
+};
+
+/* ═══════════════════════════════════════════════════════════
+   TOOLS HUB
+   ═══════════════════════════════════════════════════════════ */
+function renderToolsHub(app) {
+  const tools = [
+    {icon:'🌍', title:'Geography Quiz', desc:'World capitals, US state capitals, country flags, and continents.', route:'geo'},
+    {icon:'➕', title:'Math Trainer', desc:'Arithmetic, times tables, fractions, and algebra practice with instant feedback.', route:'math'},
+    {icon:'💬', title:'Language Tools', desc:'Spanish & French vocabulary and Spanish verb conjugation drills.', route:'language'},
+    {icon:'⚗️', title:'Periodic Table', desc:'Quiz yourself on element names, symbols, and atomic numbers.', route:'elements'},
+    {icon:'🧠', title:'AI Essay Grader', desc:'An AI generates open-ended questions on any topic, then grades your paragraph responses.', route:'essay'},
+  ];
+  app.innerHTML = `
+    <div class="home-header">
+      <div>
+        <h1>Study Tools</h1>
+        <p>Specialized tools to help you study every subject</p>
+      </div>
+      <button class="btn btn-ghost" onclick="navigate('home')">← My Sets</button>
+    </div>
+    <div class="tools-grid">
+      ${tools.map(t => `
+        <div class="tool-card" onclick="navigate('${t.route}')">
+          <div class="tool-icon">${t.icon}</div>
+          <div class="tool-title">${t.title}</div>
+          <div class="tool-desc">${t.desc}</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:auto">Open →</button>
+        </div>`).join('')}
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   GEOGRAPHY QUIZ
+   ═══════════════════════════════════════════════════════════ */
+function renderGeoHub(app) {
+  const modes = [
+    {label:'Country → Capital',sub:'See a country name, pick its capital',route:'geo-quiz/country-capital'},
+    {label:'Capital → Country',sub:'See a capital city, pick its country',route:'geo-quiz/capital-country'},
+    {label:'Flag → Country',sub:'See a flag emoji, pick the country',route:'geo-quiz/flag-country'},
+    {label:'US State → Capital',sub:'See a US state, pick its capital',route:'geo-quiz/us-state-capital'},
+    {label:'US Capital → State',sub:'See a capital, pick the US state',route:'geo-quiz/us-capital-state'},
+    {label:'Country → Continent',sub:'Identify which continent a country belongs to',route:'geo-quiz/country-continent'},
+  ];
+  app.innerHTML = `
+    <div class="home-header">
+      <div><h1>🌍 Geography Quiz</h1><p>Pick a quiz mode to start</p></div>
+      <button class="btn btn-ghost" onclick="navigate('tools')">← Tools</button>
+    </div>
+    <div class="tools-grid">
+      ${modes.map(m => `
+        <div class="tool-card" onclick="navigate('${m.route}')">
+          <div class="tool-title">${m.label}</div>
+          <div class="tool-desc">${m.sub}</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:auto">Start →</button>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderGeoQuiz(app, mode) {
+  let pool, getQuestion, getOptions, getCorrect;
+  const Q = 20;
+
+  if (mode === 'country-capital') {
+    pool = shuffle([...WORLD_CAPITALS]).slice(0, Q);
+    getQuestion = d => `What is the capital of ${d.country}? ${d.flag}`;
+    getCorrect  = d => d.capital;
+    getOptions  = (d, all) => buildOpts(d.capital, all.map(x => x.capital));
+  } else if (mode === 'capital-country') {
+    pool = shuffle([...WORLD_CAPITALS]).slice(0, Q);
+    getQuestion = d => `${d.flag} ${d.capital} is the capital of which country?`;
+    getCorrect  = d => d.country;
+    getOptions  = (d, all) => buildOpts(d.country, all.map(x => x.country));
+  } else if (mode === 'flag-country') {
+    pool = shuffle([...WORLD_CAPITALS]).slice(0, Q);
+    getQuestion = d => `Which country does this flag represent?  ${d.flag}`;
+    getCorrect  = d => d.country;
+    getOptions  = (d, all) => buildOpts(d.country, all.map(x => x.country));
+  } else if (mode === 'us-state-capital') {
+    pool = shuffle([...US_STATES]).slice(0, Q);
+    getQuestion = d => `What is the capital of ${d.state}?`;
+    getCorrect  = d => d.capital;
+    getOptions  = (d, all) => buildOpts(d.capital, all.map(x => x.capital));
+  } else if (mode === 'us-capital-state') {
+    pool = shuffle([...US_STATES]).slice(0, Q);
+    getQuestion = d => `${d.capital} is the capital of which US state?`;
+    getCorrect  = d => d.state;
+    getOptions  = (d, all) => buildOpts(d.state, all.map(x => x.state));
+  } else if (mode === 'country-continent') {
+    pool = shuffle([...WORLD_CAPITALS]).slice(0, Q);
+    getQuestion = d => `${d.flag} Which continent is ${d.country} in?`;
+    getCorrect  = d => d.continent;
+    getOptions  = (d, all) => buildOpts(d.continent, ['Africa','Asia','Europe','North America','South America','Oceania']);
+  }
+
+  runMCQuiz(app, pool, getQuestion, getCorrect, getOptions, '🌍 Geography', mode, 'geo');
+}
+
+function buildOpts(correct, allValues) {
+  const others = shuffle([...new Set(allValues.filter(v => v !== correct))]).slice(0, 3);
+  return shuffle([correct, ...others]);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SHARED MC QUIZ RUNNER
+   ═══════════════════════════════════════════════════════════ */
+function runMCQuiz(app, pool, getQuestion, getCorrect, getOptions, label, mode, backRoute) {
+  let idx = 0, score = 0, answered = false;
+
+  function renderQ() {
+    if (idx >= pool.length) { showResult(); return; }
+    answered = false;
+    const item = pool[idx];
+    const correct = getCorrect(item);
+    const opts = getOptions(item, pool);
+
+    app.innerHTML = `
+      <div class="quiz-header">
+        <div>
+          <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">${label}</div>
+          <h2>Question ${idx+1} of ${pool.length}</h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('${backRoute}')">← Back</button>
+      </div>
+      <div style="max-width:640px;margin:0 auto .75rem">
+        <div class="progress-bar"><div class="progress-bar-fill" style="width:${Math.round(idx/pool.length*100)}%"></div></div>
+      </div>
+      <div class="quiz-card">
+        <div class="quiz-question" style="font-size:1.3rem">${escHtml(getQuestion(item))}</div>
+        <div class="quiz-options" id="quiz-options">
+          ${opts.map(o => `<button class="quiz-option" data-val="${escAttr(o)}" onclick="mcPick(this,'${escAttr(correct)}')">${escHtml(o)}</button>`).join('')}
+        </div>
+        <div id="quiz-feedback" class="quiz-feedback"></div>
+        <div id="quiz-next" class="quiz-next" style="display:none">
+          <button class="btn btn-primary" onclick="mcNext()">
+            ${idx < pool.length-1 ? 'Next →' : 'See Results'}
+          </button>
+        </div>
+      </div>`;
+  }
+
+  window.mcPick = function(btn, correct) {
+    if (answered) return;
+    answered = true;
+    const selected = btn.dataset.val;
+    const isCorrect = selected === correct;
+    if (isCorrect) score++;
+    document.querySelectorAll('.quiz-option').forEach(b => {
+      b.onclick = null; b.classList.add('disabled');
+      if (b.dataset.val === correct) b.classList.add('show-correct');
+      if (b.dataset.val === selected && !isCorrect) b.classList.add('wrong');
+      if (b.dataset.val === selected && isCorrect) b.classList.add('correct');
+    });
+    const fb = document.getElementById('quiz-feedback');
+    fb.textContent = isCorrect ? '✓ Correct!' : `✗ Incorrect — answer: ${correct}`;
+    fb.className = `quiz-feedback ${isCorrect ? 'correct' : 'wrong'}`;
+    document.getElementById('quiz-next').style.display = 'flex';
+  };
+
+  window.mcNext = function() { idx++; renderQ(); };
+
+  function showResult() {
+    const pct = Math.round(score / pool.length * 100);
+    const color = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)';
+    const r = 54, circ = 2*Math.PI*r, dash = (pct/100)*circ;
+    app.innerHTML = `
+      <div class="quiz-score-card">
+        <div style="font-size:2rem">🏆</div>
+        <h2>Quiz Complete!</h2>
+        <p>You scored ${score} out of ${pool.length}</p>
+        <div class="score-ring-wrap"><div class="score-ring">
+          <svg width="140" height="140" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--border)" stroke-width="14"/>
+            <circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="14"
+              stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/>
+          </svg>
+          <div class="score-ring-text">
+            <span class="score-ring-pct" style="color:${color}">${pct}%</span>
+            <span class="score-ring-label">Score</span>
+          </div>
+        </div></div>
+        <div class="complete-actions">
+          <button class="btn btn-ghost" onclick="navigate('${backRoute}')">← Back</button>
+          <button class="btn btn-primary" onclick="navigate('${mode}')">Try Again</button>
+        </div>
+      </div>`;
+  }
+
+  renderQ();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MATH TRAINER
+   ═══════════════════════════════════════════════════════════ */
+function renderMathHub(app) {
+  const modes = [
+    {label:'Arithmetic (Easy)',sub:'Addition & subtraction with small numbers',route:'math-quiz/arith-easy'},
+    {label:'Arithmetic (Hard)',sub:'All operations with larger numbers',route:'math-quiz/arith-hard'},
+    {label:'Times Tables',sub:'Multiplication facts 1–12',route:'math-quiz/times-tables'},
+    {label:'Fractions',sub:'Add and subtract fractions with different denominators',route:'math-quiz/fractions'},
+    {label:'Basic Algebra',sub:'Solve for x in linear equations',route:'math-quiz/algebra'},
+  ];
+  app.innerHTML = `
+    <div class="home-header">
+      <div><h1>➕ Math Trainer</h1><p>Pick a topic to practice</p></div>
+      <button class="btn btn-ghost" onclick="navigate('tools')">← Tools</button>
+    </div>
+    <div class="tools-grid">
+      ${modes.map(m => `
+        <div class="tool-card" onclick="navigate('${m.route}')">
+          <div class="tool-title">${m.label}</div>
+          <div class="tool-desc">${m.sub}</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:auto">Start →</button>
+        </div>`).join('')}
+    </div>`;
+}
+
+function mathRandInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function mathGcd(a, b) { return b === 0 ? a : mathGcd(b, a % b); }
+
+function generateMathProblem(mode) {
+  if (mode === 'arith-easy') {
+    const ops = ['+', '-'];
+    const op = ops[Math.floor(Math.random()*2)];
+    const a = mathRandInt(1, 20), b = mathRandInt(1, 20);
+    if (op === '+') return {q:`${a} + ${b} = ?`, a:String(a+b)};
+    const big = Math.max(a,b), small = Math.min(a,b);
+    return {q:`${big} − ${small} = ?`, a:String(big-small)};
+  }
+  if (mode === 'arith-hard') {
+    const ops = ['+', '-', '×', '÷'];
+    const op = ops[Math.floor(Math.random()*4)];
+    if (op==='+'){const a=mathRandInt(10,999),b=mathRandInt(10,999);return{q:`${a} + ${b} = ?`,a:String(a+b)};}
+    if (op==='-'){const a=mathRandInt(50,999),b=mathRandInt(1,a);return{q:`${a} − ${b} = ?`,a:String(a-b)};}
+    if (op==='×'){const a=mathRandInt(2,25),b=mathRandInt(2,25);return{q:`${a} × ${b} = ?`,a:String(a*b)};}
+    const b=mathRandInt(2,12),ans=mathRandInt(2,25);return{q:`${b*ans} ÷ ${b} = ?`,a:String(ans)};
+  }
+  if (mode === 'times-tables') {
+    const a = mathRandInt(2, 12), b = mathRandInt(1, 12);
+    return {q:`${a} × ${b} = ?`, a:String(a*b)};
+  }
+  if (mode === 'fractions') {
+    const d1=mathRandInt(2,8), d2=mathRandInt(2,8);
+    const n1=mathRandInt(1,d1-1||1), n2=mathRandInt(1,d2-1||1);
+    const numSum=n1*d2+n2*d1, denSum=d1*d2;
+    const g=mathGcd(numSum,denSum);
+    const rn=numSum/g, rd=denSum/g;
+    const ans = rd===1 ? String(rn) : `${rn}/${rd}`;
+    return {q:`${n1}/${d1} + ${n2}/${d2} = ? (simplify)`, a:ans, hint:`${rn}/${rd}`};
+  }
+  if (mode === 'algebra') {
+    const a=mathRandInt(1,10), x=mathRandInt(-15,15), b=mathRandInt(-20,20);
+    const c=a*x+b;
+    const lhs = b>=0 ? `${a}x + ${b}` : `${a}x − ${Math.abs(b)}`;
+    return {q:`Solve for x:  ${lhs} = ${c}`, a:String(x)};
+  }
+  return {q:'', a:''};
+}
+
+function renderMathQuiz(app, mode) {
+  const TOTAL = 20;
+  let idx=0, score=0, wrong=0;
+  const modeLabels = {
+    'arith-easy':'Arithmetic (Easy)', 'arith-hard':'Arithmetic (Hard)',
+    'times-tables':'Times Tables', 'fractions':'Fractions', 'algebra':'Algebra'
+  };
+  const label = modeLabels[mode] || 'Math';
+
+  function renderQ() {
+    if (idx >= TOTAL) { showResult(); return; }
+    const {q, a: correctAns} = generateMathProblem(mode);
+
+    app.innerHTML = `
+      <div class="quiz-header">
+        <div>
+          <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">➕ ${label}</div>
+          <h2>Problem ${idx+1} of ${TOTAL}</h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('math')">← Back</button>
+      </div>
+      <div style="max-width:640px;margin:0 auto .75rem">
+        <div class="progress-bar"><div class="progress-bar-fill" style="width:${Math.round(idx/TOTAL*100)}%"></div></div>
+      </div>
+      <div class="quiz-card">
+        <div class="quiz-question" style="font-size:1.6rem;font-family:monospace;letter-spacing:.02em">${escHtml(q)}</div>
+        <div class="written-input-wrap">
+          <input id="math-answer" type="text" class="written-answer-input"
+            placeholder="Your answer…" autocomplete="off" inputmode="decimal" />
+          <button class="btn btn-primary btn-wide" onclick="mathSubmit('${escAttr(correctAns)}')">Check</button>
+        </div>
+        <div id="math-feedback" class="written-feedback"></div>
+        <div id="math-next" class="quiz-next" style="display:none">
+          <button class="btn btn-primary" onclick="mathNext()">
+            ${idx < TOTAL-1 ? 'Next →' : 'See Results'}
+          </button>
+        </div>
+      </div>`;
+
+    const inp = document.getElementById('math-answer');
+    inp.focus();
+    inp.addEventListener('keydown', e => { if (e.key==='Enter') mathSubmit(correctAns); });
+  }
+
+  window.mathSubmit = function(correctAns) {
+    const inp = document.getElementById('math-answer');
+    if (!inp || inp.disabled) return;
+    const val = inp.value.trim().replace(/\s/g,'');
+    if (!val) { showToast('Enter an answer first.'); return; }
+    const isCorrect = val.toLowerCase() === correctAns.toLowerCase();
+    if (isCorrect) score++; else wrong++;
+    inp.disabled = true;
+    inp.classList.add(isCorrect ? 'written-correct' : 'written-wrong');
+    const fb = document.getElementById('math-feedback');
+    fb.className = `written-feedback ${isCorrect ? 'correct' : 'wrong'}`;
+    fb.innerHTML = isCorrect ? '✓ Correct!' : `✗ Incorrect — answer: <strong>${escHtml(correctAns)}</strong>`;
+    document.getElementById('math-next').style.display = 'flex';
+  };
+
+  window.mathNext = function() { idx++; renderQ(); };
+
+  function showResult() {
+    const pct = Math.round(score/TOTAL*100);
+    const color = pct>=80?'var(--success)':pct>=50?'var(--warning)':'var(--danger)';
+    const r=54,circ=2*Math.PI*r,dash=(pct/100)*circ;
+    app.innerHTML = `
+      <div class="quiz-score-card">
+        <div style="font-size:2rem">🔢</div>
+        <h2>${label} Complete!</h2>
+        <p>You scored ${score} out of ${TOTAL}</p>
+        <div class="score-ring-wrap"><div class="score-ring">
+          <svg width="140" height="140" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--border)" stroke-width="14"/>
+            <circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="14"
+              stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/>
+          </svg>
+          <div class="score-ring-text">
+            <span class="score-ring-pct" style="color:${color}">${pct}%</span>
+            <span class="score-ring-label">Score</span>
+          </div>
+        </div></div>
+        <div class="complete-actions">
+          <button class="btn btn-ghost" onclick="navigate('math')">← Back</button>
+          <button class="btn btn-primary" onclick="navigate('math-quiz/${mode}')">Try Again</button>
+        </div>
+      </div>`;
+  }
+
+  renderQ();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LANGUAGE TOOLS
+   ═══════════════════════════════════════════════════════════ */
+function renderLanguageHub(app) {
+  const esThemes = Object.keys(SPANISH_VOCAB).map(t =>
+    `<button class="btn btn-outline btn-sm" onclick="navigate('lang-quiz/es-vocab-${encodeURIComponent(t)}')">${t}</button>`).join('');
+  const frThemes = Object.keys(FRENCH_VOCAB).map(t =>
+    `<button class="btn btn-outline btn-sm" onclick="navigate('lang-quiz/fr-vocab-${encodeURIComponent(t)}')">${t}</button>`).join('');
+
+  app.innerHTML = `
+    <div class="home-header">
+      <div><h1>💬 Language Tools</h1><p>Vocabulary and conjugation drills</p></div>
+      <button class="btn btn-ghost" onclick="navigate('tools')">← Tools</button>
+    </div>
+    <div class="lang-hub">
+      <div class="lang-section">
+        <div class="section-heading">🇪🇸 Spanish — Vocabulary</div>
+        <div class="lang-btn-row">${esThemes}</div>
+        <div class="section-heading" style="margin-top:1.5rem">🇪🇸 Spanish — Verb Conjugation</div>
+        <div class="lang-btn-row">
+          <button class="btn btn-outline btn-sm" onclick="navigate('lang-quiz/es-conj-present')">Present Tense</button>
+          <button class="btn btn-outline btn-sm" onclick="navigate('lang-quiz/es-conj-preterite')">Preterite Tense</button>
+        </div>
+      </div>
+      <div class="lang-section">
+        <div class="section-heading">🇫🇷 French — Vocabulary</div>
+        <div class="lang-btn-row">${frThemes}</div>
+      </div>
+    </div>`;
+}
+
+function renderLangQuiz(app, param) {
+  const parts = param.split('-');
+  const lang = parts[0]; // 'es' or 'fr'
+  const type = parts[1]; // 'vocab' or 'conj'
+  const detail = parts.slice(2).join('-'); // theme or tense
+
+  if (type === 'vocab') {
+    const theme = decodeURIComponent(detail);
+    const dict = lang === 'es' ? SPANISH_VOCAB : FRENCH_VOCAB;
+    const key = lang === 'es' ? 'es' : 'fr';
+    const langName = lang === 'es' ? 'Spanish' : 'French';
+    const pool = shuffle([...(dict[theme] || [])]);
+    if (!pool.length) { navigate('language'); return; }
+    const fullPool = lang === 'es'
+      ? Object.values(SPANISH_VOCAB).flat()
+      : Object.values(FRENCH_VOCAB).flat();
+
+    const getQ  = d => `What is the ${langName} word for "${d.en}"?`;
+    const getC  = d => d[key];
+    const getO  = (d, all) => buildOpts(d[key], fullPool.map(x => x[key]));
+    runMCQuiz(app, pool, getQ, getC, getO, `${langName} — ${theme}`, `lang-quiz/${param}`, 'language');
+
+  } else if (type === 'conj') {
+    const tense = detail; // 'present' or 'preterite'
+    const subjects = ['yo','tú','él/ella','nosotros','vosotros','ellos/ellas'];
+    const pool = [];
+    shuffle([...SPANISH_VERBS]).forEach(v => {
+      subjects.forEach(s => {
+        pool.push({verb: v.infinitive, english: v.english, subject: s, answer: v[tense][s]});
+      });
+    });
+    const q20 = shuffle(pool).slice(0, 20);
+    const tenseLabel = tense === 'present' ? 'Present' : 'Preterite';
+
+    let idx=0, score=0, wrong=0, quizAnswered=false;
+
+    function renderConjQ() {
+      if (idx >= q20.length) { showConjResult(); return; }
+      quizAnswered = false;
+      const item = q20[idx];
+      const allAnswers = SPANISH_VERBS.flatMap(v => Object.values(v[tense]));
+      const opts = buildOpts(item.answer, allAnswers);
+
+      app.innerHTML = `
+        <div class="quiz-header">
+          <div>
+            <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">🇪🇸 Spanish — ${tenseLabel}</div>
+            <h2>Question ${idx+1} of ${q20.length}</h2>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="navigate('language')">← Back</button>
+        </div>
+        <div style="max-width:640px;margin:0 auto .75rem">
+          <div class="progress-bar"><div class="progress-bar-fill" style="width:${Math.round(idx/q20.length*100)}%"></div></div>
+        </div>
+        <div class="quiz-card">
+          <div class="quiz-question">
+            <div style="font-size:.9rem;color:var(--text-muted);margin-bottom:.4rem">${item.verb} (${item.english})</div>
+            What is the <strong>${tenseLabel.toLowerCase()}</strong> conjugation of
+            <strong>${item.verb}</strong> for <strong>${item.subject}</strong>?
+          </div>
+          <div class="quiz-options">
+            ${opts.map(o => `<button class="quiz-option" data-val="${escAttr(o)}" onclick="mcPick(this,'${escAttr(item.answer)}')">${escHtml(o)}</button>`).join('')}
+          </div>
+          <div id="quiz-feedback" class="quiz-feedback"></div>
+          <div id="quiz-next" class="quiz-next" style="display:none">
+            <button class="btn btn-primary" onclick="conjNext()">${idx < q20.length-1 ? 'Next →' : 'See Results'}</button>
+          </div>
+        </div>`;
+
+      window.mcPick = function(btn, correct) {
+        if (quizAnswered) return;
+        quizAnswered = true;
+        const sel = btn.dataset.val;
+        const ok = sel === correct;
+        if (ok) score++; else wrong++;
+        document.querySelectorAll('.quiz-option').forEach(b => {
+          b.onclick=null; b.classList.add('disabled');
+          if (b.dataset.val===correct) b.classList.add('show-correct');
+          if (b.dataset.val===sel && !ok) b.classList.add('wrong');
+          if (b.dataset.val===sel && ok) b.classList.add('correct');
+        });
+        const fb=document.getElementById('quiz-feedback');
+        fb.textContent = ok ? '✓ Correct!' : `✗ Incorrect — ${correct}`;
+        fb.className = `quiz-feedback ${ok?'correct':'wrong'}`;
+        document.getElementById('quiz-next').style.display='flex';
+      };
+      window.conjNext = function() { idx++; renderConjQ(); };
+    }
+
+    function showConjResult() {
+      const pct=Math.round(score/q20.length*100);
+      const color=pct>=80?'var(--success)':pct>=50?'var(--warning)':'var(--danger)';
+      const r=54,circ=2*Math.PI*r,dash=(pct/100)*circ;
+      app.innerHTML=`
+        <div class="quiz-score-card">
+          <div style="font-size:2rem">🇪🇸</div>
+          <h2>Conjugation Quiz Complete!</h2>
+          <p>You scored ${score} out of ${q20.length}</p>
+          <div class="score-ring-wrap"><div class="score-ring">
+            <svg width="140" height="140" viewBox="0 0 140 140">
+              <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--border)" stroke-width="14"/>
+              <circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="14"
+                stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/>
+            </svg>
+            <div class="score-ring-text">
+              <span class="score-ring-pct" style="color:${color}">${pct}%</span>
+              <span class="score-ring-label">Score</span>
+            </div>
+          </div></div>
+          <div class="complete-actions">
+            <button class="btn btn-ghost" onclick="navigate('language')">← Back</button>
+            <button class="btn btn-primary" onclick="navigate('lang-quiz/${param}')">Try Again</button>
+          </div>
+        </div>`;
+    }
+
+    renderConjQ();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PERIODIC TABLE QUIZ
+   ═══════════════════════════════════════════════════════════ */
+function renderPeriodicHub(app) {
+  app.innerHTML = `
+    <div class="home-header">
+      <div><h1>⚗️ Periodic Table</h1><p>Pick a quiz mode</p></div>
+      <button class="btn btn-ghost" onclick="navigate('tools')">← Tools</button>
+    </div>
+    <div class="tools-grid">
+      <div class="tool-card" onclick="navigate('elements/symbol-name')">
+        <div class="tool-title">Symbol → Name</div>
+        <div class="tool-desc">See a chemical symbol, identify the element name.</div>
+        <button class="btn btn-primary btn-sm" style="margin-top:auto">Start →</button>
+      </div>
+      <div class="tool-card" onclick="navigate('elements/name-symbol')">
+        <div class="tool-title">Name → Symbol</div>
+        <div class="tool-desc">See an element name, pick its chemical symbol.</div>
+        <button class="btn btn-primary btn-sm" style="margin-top:auto">Start →</button>
+      </div>
+      <div class="tool-card" onclick="navigate('elements/number-name')">
+        <div class="tool-title">Atomic Number → Name</div>
+        <div class="tool-desc">See an atomic number, pick the element name.</div>
+        <button class="btn btn-primary btn-sm" style="margin-top:auto">Start →</button>
+      </div>
+    </div>`;
+}
+
+function renderPeriodicQuiz(app, mode) {
+  const pool = shuffle([...PERIODIC_ELEMENTS]).slice(0, 20);
+  let getQ, getC, getO;
+  if (mode === 'symbol-name') {
+    getQ = e => `What element has the symbol  ${e.symbol} ?`;
+    getC = e => e.name;
+    getO = (e,all) => buildOpts(e.name, all.map(x=>x.name));
+  } else if (mode === 'name-symbol') {
+    getQ = e => `What is the chemical symbol for ${e.name}?`;
+    getC = e => e.symbol;
+    getO = (e,all) => buildOpts(e.symbol, all.map(x=>x.symbol));
+  } else {
+    getQ = e => `Atomic number ${e.number} belongs to which element?`;
+    getC = e => e.name;
+    getO = (e,all) => buildOpts(e.name, all.map(x=>x.name));
+  }
+  runMCQuiz(app, pool, getQ, getC, getO, '⚗️ Periodic Table', `elements/${mode}`, 'elements');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AI ESSAY GRADER
+   ═══════════════════════════════════════════════════════════ */
+async function callClaude(apiKey, systemPrompt, userPrompt) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+function renderEssayGrader(app) {
+  const savedKey = localStorage.getItem('sf_anthropic_key') || '';
+
+  app.innerHTML = `
+    <div class="home-header">
+      <div><h1>🧠 AI Essay Grader</h1><p>AI-generated questions graded by AI</p></div>
+      <button class="btn btn-ghost" onclick="navigate('tools')">← Tools</button>
+    </div>
+    <div class="form-card" style="max-width:640px;margin:0 auto">
+      <div class="form-group">
+        <label for="essay-api-key">Anthropic API Key</label>
+        <input id="essay-api-key" type="password" placeholder="sk-ant-…"
+          value="${escAttr(savedKey)}" autocomplete="off" />
+        <span class="hint">Your key is stored only in your browser and never sent anywhere except Anthropic's API.</span>
+      </div>
+      <div class="form-group">
+        <label for="essay-topic">Topic / Subject</label>
+        <input id="essay-topic" type="text" placeholder="e.g. The American Civil War, Photosynthesis, Romeo and Juliet…" maxlength="200" />
+      </div>
+      <div class="form-group">
+        <label for="essay-qcount">Number of Questions</label>
+        <select id="essay-qcount" style="padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:1rem;background:var(--surface)">
+          <option value="3">3 questions</option>
+          <option value="5" selected>5 questions</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-lg" onclick="essayGenerate()">Generate Questions →</button>
+      </div>
+      <div id="essay-error" style="color:var(--danger);margin-top:.75rem;display:none"></div>
+    </div>`;
+
+  window.essayGenerate = async function() {
+    const apiKey = document.getElementById('essay-api-key').value.trim();
+    const topic  = document.getElementById('essay-topic').value.trim();
+    const qcount = parseInt(document.getElementById('essay-qcount').value, 10);
+    const errEl  = document.getElementById('essay-error');
+    errEl.style.display = 'none';
+
+    if (!apiKey) { errEl.textContent = 'Please enter your Anthropic API key.'; errEl.style.display=''; return; }
+    if (!topic)  { errEl.textContent = 'Please enter a topic.'; errEl.style.display=''; return; }
+
+    localStorage.setItem('sf_anthropic_key', apiKey);
+
+    const btn = document.querySelector('.btn-lg');
+    btn.textContent = 'Generating…'; btn.disabled = true;
+
+    try {
+      const raw = await callClaude(apiKey,
+        'You are a teacher creating open-ended essay questions for high school students. Respond only with a valid JSON array of question strings.',
+        `Generate ${qcount} thoughtful open-ended questions about: "${topic}".
+Each question should require a paragraph response (4–8 sentences) testing analysis, cause-and-effect, comparison, or evaluation.
+Respond with ONLY a JSON array: ["Question 1?", "Question 2?", ...]`
+      );
+      let questions;
+      try { questions = JSON.parse(raw.match(/\[[\s\S]*\]/)[0]); }
+      catch { throw new Error('Could not parse questions from AI response. Try again.'); }
+      renderEssaySession(app, apiKey, topic, questions);
+    } catch(e) {
+      btn.textContent = 'Generate Questions →'; btn.disabled = false;
+      errEl.textContent = 'Error: ' + e.message; errEl.style.display = '';
+    }
+  };
+}
+
+function renderEssaySession(app, apiKey, topic, questions) {
+  let idx = 0;
+  const results = [];
+
+  function renderQuestion() {
+    if (idx >= questions.length) { renderEssaySummary(); return; }
+    const q = questions[idx];
+    app.innerHTML = `
+      <div class="quiz-header">
+        <div>
+          <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">🧠 AI Essay Grader — ${escHtml(topic)}</div>
+          <h2>Question ${idx+1} of ${questions.length}</h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('essay')">✕ Exit</button>
+      </div>
+      <div class="essay-card">
+        <div class="essay-question">${escHtml(q)}</div>
+        <textarea id="essay-answer" class="essay-textarea"
+          placeholder="Write a paragraph response (4–8 sentences)…" rows="6"></textarea>
+        <div id="essay-wc" style="font-size:.78rem;color:var(--text-muted);text-align:right;margin-top:.3rem">0 words</div>
+        <div class="form-actions" style="margin-top:1rem">
+          <button class="btn btn-primary" id="essay-submit-btn" onclick="essaySubmit()">Submit Answer →</button>
+        </div>
+        <div id="essay-grade-area" style="display:none"></div>
+      </div>`;
+
+    const ta = document.getElementById('essay-answer');
+    ta.addEventListener('input', () => {
+      const words = ta.value.trim().split(/\s+/).filter(Boolean).length;
+      document.getElementById('essay-wc').textContent = `${words} word${words!==1?'s':''}`;
+    });
+
+    window.essaySubmit = async function() {
+      const answer = document.getElementById('essay-answer').value.trim();
+      if (answer.split(/\s+/).filter(Boolean).length < 10) {
+        showToast('Please write at least a few sentences before submitting.'); return;
+      }
+      const btn = document.getElementById('essay-submit-btn');
+      btn.textContent = 'Grading…'; btn.disabled = true;
+      document.getElementById('essay-answer').disabled = true;
+
+      try {
+        const raw = await callClaude(apiKey,
+          'You are a strict but fair teacher grading student essay responses. Respond only with valid JSON.',
+          `Topic: "${topic}"
+Question: "${q}"
+Student answer: "${answer}"
+
+Grade this response. Respond with ONLY this JSON:
+{
+  "score": <1-5>,
+  "grade": "<Excellent|Good|Satisfactory|Needs Improvement|Poor>",
+  "feedback": "<1-2 sentence overall comment>",
+  "strengths": ["<strength1>", "<strength2>"],
+  "improvements": ["<improvement1>", "<improvement2>"],
+  "missingDetails": "<Key facts or concepts not mentioned that would earn full credit>"
+}`
+        );
+        let result;
+        try { result = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]); }
+        catch { throw new Error('Could not parse grading response.'); }
+
+        results.push({ q, answer, result });
+        const scoreColor = result.score>=4?'var(--success)':result.score>=3?'var(--warning)':'var(--danger)';
+        const gradeArea = document.getElementById('essay-grade-area');
+        gradeArea.style.display = '';
+        gradeArea.innerHTML = `
+          <div class="essay-grade-box">
+            <div class="essay-score-row">
+              <span class="essay-score-badge" style="background:${scoreColor}">${result.score}/5 — ${escHtml(result.grade)}</span>
+            </div>
+            <p class="essay-feedback-text">${escHtml(result.feedback)}</p>
+            ${result.strengths?.length ? `
+              <div class="essay-grade-section">
+                <strong style="color:var(--success)">✓ Strengths</strong>
+                <ul>${result.strengths.map(s=>`<li>${escHtml(s)}</li>`).join('')}</ul>
+              </div>` : ''}
+            ${result.improvements?.length ? `
+              <div class="essay-grade-section">
+                <strong style="color:var(--danger)">✗ Areas to Improve</strong>
+                <ul>${result.improvements.map(s=>`<li>${escHtml(s)}</li>`).join('')}</ul>
+              </div>` : ''}
+            ${result.missingDetails ? `
+              <div class="essay-grade-section">
+                <strong style="color:var(--primary)">💡 Missing Details for Full Credit</strong>
+                <p style="margin:.3rem 0 0">${escHtml(result.missingDetails)}</p>
+              </div>` : ''}
+            <button class="btn btn-primary" style="margin-top:1rem" onclick="essayNext()">
+              ${idx < questions.length-1 ? 'Next Question →' : 'See Summary'}
+            </button>
+          </div>`;
+      } catch(e) {
+        btn.textContent = 'Submit Answer →'; btn.disabled = false;
+        document.getElementById('essay-answer').disabled = false;
+        showToast('Grading error: ' + e.message);
+      }
+    };
+
+    window.essayNext = function() { idx++; renderQuestion(); };
+  }
+
+  function renderEssaySummary() {
+    const total = results.reduce((s,r)=>s+r.result.score, 0);
+    const max   = results.length * 5;
+    const pct   = Math.round(total/max*100);
+    const color = pct>=80?'var(--success)':pct>=50?'var(--warning)':'var(--danger)';
+
+    const breakdown = results.map((r,i) => `
+      <div class="essay-summary-item">
+        <div style="font-size:.85rem;font-weight:700;color:var(--text-muted)">Q${i+1}</div>
+        <div style="flex:1;font-size:.9rem">${escHtml(r.q)}</div>
+        <span class="essay-score-badge" style="background:${r.result.score>=4?'var(--success)':r.result.score>=3?'var(--warning)':'var(--danger)'};flex-shrink:0">
+          ${r.result.score}/5
+        </span>
+      </div>`).join('');
+
+    app.innerHTML = `
+      <div class="home-header">
+        <div><h1>🧠 Essay Grader — Results</h1><p>${escHtml(topic)}</p></div>
+        <button class="btn btn-ghost" onclick="navigate('essay')">New Session</button>
+      </div>
+      <div class="quiz-score-card" style="margin-bottom:1.5rem">
+        <h2>Session Complete!</h2>
+        <p>Total: ${total} / ${max} points</p>
+        <div class="big-score" style="color:${color}">${pct}%</div>
+      </div>
+      <div class="essay-summary-list">${breakdown}</div>`;
+  }
+
+  renderQuestion();
 }
