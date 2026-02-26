@@ -1865,26 +1865,207 @@ function runMCQuiz(app, pool, getQuestion, getCorrect, getOptions, label, mode, 
    MATH TRAINER
    ═══════════════════════════════════════════════════════════ */
 function renderMathHub(app) {
-  const modes = [
-    {label:'Arithmetic (Easy)',sub:'Addition & subtraction with small numbers',route:'math-quiz/arith-easy'},
-    {label:'Arithmetic (Hard)',sub:'All operations with larger numbers',route:'math-quiz/arith-hard'},
-    {label:'Times Tables',sub:'Multiplication facts 1–12',route:'math-quiz/times-tables'},
-    {label:'Fractions',sub:'Add and subtract fractions with different denominators',route:'math-quiz/fractions'},
-    {label:'Basic Algebra',sub:'Solve for x in linear equations',route:'math-quiz/algebra'},
-  ];
+  const selectStyle = 'width:100%;padding:.55rem .75rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:1rem;background:var(--surface);color:var(--text)';
+  const suggestions = ['Factoring quadratics','Long division','Derivatives','Systems of equations',
+    'Fractions & decimals','Times tables','Geometry area & perimeter','Probability','Trigonometry','Exponents & radicals'];
+
   app.innerHTML = `
     <div class="home-header">
-      <div><h1>➕ Math Trainer</h1><p>Pick a topic to practice</p></div>
+      <div><h1>➕ Math Trainer</h1><p>AI-generated problems on any math topic</p></div>
       <button class="btn btn-ghost" onclick="navigate('tools')">← Tools</button>
     </div>
-    <div class="tools-grid">
-      ${modes.map(m => `
-        <div class="tool-card" onclick="navigate('${m.route}')">
-          <div class="tool-title">${m.label}</div>
-          <div class="tool-desc">${m.sub}</div>
-          <button class="btn btn-primary btn-sm" style="margin-top:auto">Start →</button>
-        </div>`).join('')}
+    <div class="form-card" style="max-width:560px;margin:0 auto">
+      ${renderAIProviderSection()}
+
+      <div class="form-group">
+        <label for="math-topic">What do you want to practice?</label>
+        <input id="math-topic" type="text"
+          placeholder="e.g. factoring quadratics, long division, derivatives…"
+          maxlength="150" />
+        <div class="math-suggestions">
+          ${suggestions.map(s => `<button class="suggestion-chip" onclick="document.getElementById('math-topic').value='${s}'">${s}</button>`).join('')}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div class="form-group">
+          <label for="math-qcount">Number of Questions</label>
+          <select id="math-qcount" style="${selectStyle}">
+            <option value="5">5 questions</option>
+            <option value="10" selected>10 questions</option>
+            <option value="20">20 questions</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="math-difficulty">Difficulty</label>
+          <select id="math-difficulty" style="${selectStyle}">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary btn-lg" id="math-gen-btn" onclick="mathGenerate()">
+          Generate Quiz →
+        </button>
+      </div>
+      <div id="math-hub-error" style="color:var(--danger);margin-top:.75rem;display:none"></div>
     </div>`;
+
+  window.mathGenerate = async function() {
+    const { provider, apiKey } = getAIConfig();
+    const topic      = document.getElementById('math-topic').value.trim();
+    const qcount     = parseInt(document.getElementById('math-qcount').value, 10);
+    const difficulty = document.getElementById('math-difficulty').value;
+    const errEl      = document.getElementById('math-hub-error');
+    errEl.style.display = 'none';
+
+    if (!apiKey) { errEl.textContent = 'Please enter your API key.'; errEl.style.display=''; return; }
+    if (!topic)  { errEl.textContent = 'Please enter a topic to practice.'; errEl.style.display=''; return; }
+
+    const btn = document.getElementById('math-gen-btn');
+    btn.textContent = 'Generating…'; btn.disabled = true;
+
+    try {
+      const raw = await callAI(provider, apiKey,
+        'You are a math teacher creating practice problems. Respond only with valid JSON.',
+        `Generate ${qcount} ${difficulty}-level math problems about: "${topic}".
+
+Rules:
+- Each problem must have one clear, unambiguous answer
+- Answers should be concise (a number, expression, or short phrase)
+- Include a short hint for each problem
+- Match the difficulty: easy = straightforward, medium = requires a few steps, hard = multi-step or conceptual
+
+Respond with ONLY a JSON array:
+[{"question": "Solve: x² - 5x + 6 = 0", "answer": "x = 2 or x = 3", "hint": "Factor into (x-a)(x-b)"}, ...]`
+      );
+
+      let questions;
+      try { questions = JSON.parse(raw.match(/\[[\s\S]*\]/)[0]); }
+      catch { throw new Error('Could not parse questions from AI response. Try again.'); }
+
+      runAIMathSession(app, questions, topic, difficulty, qcount);
+    } catch(e) {
+      btn.textContent = 'Generate Quiz →'; btn.disabled = false;
+      errEl.textContent = 'Error: ' + e.message; errEl.style.display = '';
+    }
+  };
+}
+
+function runAIMathSession(app, questions, topic, difficulty, total) {
+  let idx = 0, score = 0, wrong = 0;
+
+  function renderQ() {
+    if (idx >= questions.length) { showResult(); return; }
+    const item = questions[idx];
+
+    app.innerHTML = `
+      <div class="quiz-header">
+        <div>
+          <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">
+            ➕ ${escHtml(topic)} · ${difficulty}
+          </div>
+          <h2>Problem ${idx + 1} of ${questions.length}</h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('math')">← Back</button>
+      </div>
+      <div style="max-width:640px;margin:0 auto .75rem">
+        <div class="progress-bar">
+          <div class="progress-bar-fill" style="width:${Math.round(idx/questions.length*100)}%"></div>
+        </div>
+      </div>
+      <div class="quiz-card">
+        <div class="quiz-question" style="font-size:1.25rem;font-family:monospace;letter-spacing:.02em;line-height:1.6">
+          ${escHtml(item.question)}
+        </div>
+        ${item.hint ? `
+        <details class="math-hint-details">
+          <summary>💡 Show hint</summary>
+          <span>${escHtml(item.hint)}</span>
+        </details>` : ''}
+        <div class="written-input-wrap" style="margin-top:1.25rem">
+          <input id="math-answer" type="text" class="written-answer-input"
+            placeholder="Your answer…" autocomplete="off" />
+          <button class="btn btn-primary btn-wide" id="math-check-btn" onclick="mathAISubmit()">Check</button>
+        </div>
+        <div id="math-feedback" class="written-feedback"></div>
+        <div id="math-next" class="quiz-next" style="display:none">
+          <button class="btn btn-primary" onclick="mathAINext()">
+            ${idx < questions.length - 1 ? 'Next →' : 'See Results'}
+          </button>
+        </div>
+      </div>`;
+
+    const inp = document.getElementById('math-answer');
+    inp.focus();
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') mathAISubmit(); });
+
+    window.mathAISubmit = function() {
+      const inp2 = document.getElementById('math-answer');
+      if (!inp2 || inp2.disabled) return;
+      const val = inp2.value.trim();
+      if (!val) { showToast('Enter an answer first.'); return; }
+
+      // Normalize: lowercase, strip spaces, normalize common math notation
+      const norm = s => s.toLowerCase()
+        .replace(/\s+/g, '')
+        .replace(/[×✕]/g, '*')
+        .replace(/[÷]/g, '/')
+        .replace(/or/g, ',');
+      const isCorrect = norm(val) === norm(item.answer);
+
+      if (isCorrect) score++; else wrong++;
+      inp2.disabled = true;
+      inp2.classList.add(isCorrect ? 'written-correct' : 'written-wrong');
+      document.getElementById('math-check-btn').disabled = true;
+
+      const fb = document.getElementById('math-feedback');
+      fb.className = `written-feedback ${isCorrect ? 'correct' : 'wrong'}`;
+      fb.innerHTML = isCorrect
+        ? '✓ Correct!'
+        : `✗ Incorrect — answer: <strong>${escHtml(item.answer)}</strong>`;
+
+      document.getElementById('math-next').style.display = 'flex';
+    };
+
+    window.mathAINext = function() { idx++; renderQ(); };
+  }
+
+  function showResult() {
+    const pct = Math.round(score / questions.length * 100);
+    const color = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)';
+    const r = 54, circ = 2 * Math.PI * r, dash = (pct / 100) * circ;
+    app.innerHTML = `
+      <div class="quiz-score-card">
+        <div style="font-size:2rem">🔢</div>
+        <h2>${escHtml(topic)} Complete!</h2>
+        <p>You scored ${score} out of ${questions.length}</p>
+        <div class="score-ring-wrap"><div class="score-ring">
+          <svg width="140" height="140" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--border)" stroke-width="14"/>
+            <circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="14"
+              stroke-dasharray="${dash} ${circ}" stroke-linecap="round"/>
+          </svg>
+          <div class="score-ring-text">
+            <span class="score-ring-pct" style="color:${color}">${pct}%</span>
+            <span class="score-ring-label">Score</span>
+          </div>
+        </div></div>
+        <div class="score-breakdown">
+          <div class="score-stat"><span class="score-stat-num correct">${score}</span><span class="score-stat-label">Correct</span></div>
+          <div class="score-stat"><span class="score-stat-num wrong">${wrong}</span><span class="score-stat-label">Incorrect</span></div>
+        </div>
+        <div class="complete-actions">
+          <button class="btn btn-ghost" onclick="navigate('math')">← Back</button>
+          <button class="btn btn-primary" onclick="navigate('math')">New Quiz</button>
+        </div>
+      </div>`;
+  }
+
+  renderQ();
 }
 
 function mathRandInt(min, max) {
@@ -2248,55 +2429,140 @@ async function callClaude(apiKey, systemPrompt, userPrompt) {
   return data.content[0].text;
 }
 
-function renderEssayGrader(app) {
-  const savedKey = localStorage.getItem('sf_anthropic_key') || '';
+/* ─── Multi-provider AI helpers ──────────────────────────── */
+function renderAIProviderSection() {
+  const p = localStorage.getItem('sf_ai_provider') || 'anthropic';
+  const keys = {
+    anthropic: escAttr(localStorage.getItem('sf_anthropic_key') || ''),
+    openai:    escAttr(localStorage.getItem('sf_openai_key')    || ''),
+    gemini:    escAttr(localStorage.getItem('sf_gemini_key')    || ''),
+  };
+  return `
+    <div class="form-group">
+      <label>AI Provider</label>
+      <div class="ai-provider-tabs">
+        <button type="button" class="ai-tab ${p==='anthropic'?'active':''}" onclick="setAIProvider('anthropic')">Anthropic (Claude)</button>
+        <button type="button" class="ai-tab ${p==='openai'?'active':''}"    onclick="setAIProvider('openai')">OpenAI (ChatGPT)</button>
+        <button type="button" class="ai-tab ${p==='gemini'?'active':''}"    onclick="setAIProvider('gemini')">Google (Gemini)</button>
+      </div>
+    </div>
+    <div id="ai-key-anthropic" class="form-group" style="${p!=='anthropic'?'display:none':''}">
+      <label>Anthropic API Key</label>
+      <input id="ai-key-anthropic-inp" type="password" placeholder="sk-ant-…" value="${keys.anthropic}" autocomplete="off" />
+      <span class="hint">Get your key at console.anthropic.com — stored only in your browser.</span>
+    </div>
+    <div id="ai-key-openai" class="form-group" style="${p!=='openai'?'display:none':''}">
+      <label>OpenAI API Key</label>
+      <input id="ai-key-openai-inp" type="password" placeholder="sk-…" value="${keys.openai}" autocomplete="off" />
+      <span class="hint">Get your key at platform.openai.com — stored only in your browser.</span>
+    </div>
+    <div id="ai-key-gemini" class="form-group" style="${p!=='gemini'?'display:none':''}">
+      <label>Google Gemini API Key</label>
+      <input id="ai-key-gemini-inp" type="password" placeholder="AIza…" value="${keys.gemini}" autocomplete="off" />
+      <span class="hint">Get your key at aistudio.google.com — stored only in your browser.</span>
+    </div>`;
+}
 
+window.setAIProvider = function(p) {
+  localStorage.setItem('sf_ai_provider', p);
+  ['anthropic', 'openai', 'gemini'].forEach(provider => {
+    const el = document.getElementById(`ai-key-${provider}`);
+    if (el) el.style.display = provider === p ? '' : 'none';
+  });
+  document.querySelectorAll('.ai-tab').forEach(tab => {
+    const labels = { anthropic:'anthropic', openai:'openai', gemini:'gemini' };
+    const tabP = Object.keys(labels).find(k => tab.textContent.toLowerCase().includes(k));
+    tab.classList.toggle('active', tabP === p);
+  });
+};
+
+function getAIConfig() {
+  const provider = localStorage.getItem('sf_ai_provider') || 'anthropic';
+  const inputMap = { anthropic:'ai-key-anthropic-inp', openai:'ai-key-openai-inp', gemini:'ai-key-gemini-inp' };
+  const storeMap = { anthropic:'sf_anthropic_key',     openai:'sf_openai_key',     gemini:'sf_gemini_key'     };
+  const inp = document.getElementById(inputMap[provider]);
+  const apiKey = (inp ? inp.value.trim() : '') || localStorage.getItem(storeMap[provider]) || '';
+  if (apiKey) localStorage.setItem(storeMap[provider], apiKey);
+  return { provider, apiKey };
+}
+
+async function callAI(provider, apiKey, systemPrompt, userPrompt) {
+  if (provider === 'anthropic') return callClaude(apiKey, systemPrompt, userPrompt);
+
+  if (provider === 'openai') {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', max_tokens: 1024,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+      }),
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `OpenAI error ${res.status}`); }
+    return (await res.json()).choices[0].message.content;
+  }
+
+  if (provider === 'gemini') {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+          generationConfig: { maxOutputTokens: 1024 },
+        }),
+      }
+    );
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `Gemini error ${res.status}`); }
+    return (await res.json()).candidates[0].content.parts[0].text;
+  }
+
+  throw new Error('Unknown AI provider: ' + provider);
+}
+
+function renderEssayGrader(app) {
+  const selectStyle = 'width:100%;padding:.55rem .75rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:1rem;background:var(--surface);color:var(--text)';
   app.innerHTML = `
     <div class="home-header">
       <div><h1>🧠 AI Essay Grader</h1><p>AI-generated questions graded by AI</p></div>
       <button class="btn btn-ghost" onclick="navigate('tools')">← Tools</button>
     </div>
     <div class="form-card" style="max-width:640px;margin:0 auto">
-      <div class="form-group">
-        <label for="essay-api-key">Anthropic API Key</label>
-        <input id="essay-api-key" type="password" placeholder="sk-ant-…"
-          value="${escAttr(savedKey)}" autocomplete="off" />
-        <span class="hint">Your key is stored only in your browser and never sent anywhere except Anthropic's API.</span>
-      </div>
+      ${renderAIProviderSection()}
       <div class="form-group">
         <label for="essay-topic">Topic / Subject</label>
         <input id="essay-topic" type="text" placeholder="e.g. The American Civil War, Photosynthesis, Romeo and Juliet…" maxlength="200" />
       </div>
       <div class="form-group">
         <label for="essay-qcount">Number of Questions</label>
-        <select id="essay-qcount" style="padding:.5rem .75rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:1rem;background:var(--surface)">
+        <select id="essay-qcount" style="${selectStyle}">
           <option value="3">3 questions</option>
           <option value="5" selected>5 questions</option>
         </select>
       </div>
       <div class="form-actions">
-        <button class="btn btn-primary btn-lg" onclick="essayGenerate()">Generate Questions →</button>
+        <button class="btn btn-primary btn-lg" id="essay-gen-btn" onclick="essayGenerate()">Generate Questions →</button>
       </div>
       <div id="essay-error" style="color:var(--danger);margin-top:.75rem;display:none"></div>
     </div>`;
 
   window.essayGenerate = async function() {
-    const apiKey = document.getElementById('essay-api-key').value.trim();
+    const { provider, apiKey } = getAIConfig();
     const topic  = document.getElementById('essay-topic').value.trim();
     const qcount = parseInt(document.getElementById('essay-qcount').value, 10);
     const errEl  = document.getElementById('essay-error');
     errEl.style.display = 'none';
 
-    if (!apiKey) { errEl.textContent = 'Please enter your Anthropic API key.'; errEl.style.display=''; return; }
+    if (!apiKey) { errEl.textContent = 'Please enter your API key.'; errEl.style.display=''; return; }
     if (!topic)  { errEl.textContent = 'Please enter a topic.'; errEl.style.display=''; return; }
 
-    localStorage.setItem('sf_anthropic_key', apiKey);
-
-    const btn = document.querySelector('.btn-lg');
+    const btn = document.getElementById('essay-gen-btn');
     btn.textContent = 'Generating…'; btn.disabled = true;
 
     try {
-      const raw = await callClaude(apiKey,
+      const raw = await callAI(provider, apiKey,
         'You are a teacher creating open-ended essay questions for high school students. Respond only with a valid JSON array of question strings.',
         `Generate ${qcount} thoughtful open-ended questions about: "${topic}".
 Each question should require a paragraph response (4–8 sentences) testing analysis, cause-and-effect, comparison, or evaluation.
@@ -2305,7 +2571,7 @@ Respond with ONLY a JSON array: ["Question 1?", "Question 2?", ...]`
       let questions;
       try { questions = JSON.parse(raw.match(/\[[\s\S]*\]/)[0]); }
       catch { throw new Error('Could not parse questions from AI response. Try again.'); }
-      renderEssaySession(app, apiKey, topic, questions);
+      renderEssaySession(app, provider, apiKey, topic, questions);
     } catch(e) {
       btn.textContent = 'Generate Questions →'; btn.disabled = false;
       errEl.textContent = 'Error: ' + e.message; errEl.style.display = '';
@@ -2313,7 +2579,7 @@ Respond with ONLY a JSON array: ["Question 1?", "Question 2?", ...]`
   };
 }
 
-function renderEssaySession(app, apiKey, topic, questions) {
+function renderEssaySession(app, provider, apiKey, topic, questions) {
   let idx = 0;
   const results = [];
 
@@ -2355,7 +2621,7 @@ function renderEssaySession(app, apiKey, topic, questions) {
       document.getElementById('essay-answer').disabled = true;
 
       try {
-        const raw = await callClaude(apiKey,
+        const raw = await callAI(provider, apiKey,
           'You are a strict but fair teacher grading student essay responses. Respond only with valid JSON.',
           `Topic: "${topic}"
 Question: "${q}"

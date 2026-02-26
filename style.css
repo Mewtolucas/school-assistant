@@ -836,3 +836,58 @@ textarea { min-height: 240px; font-family: 'SF Mono', 'Consolas', monospace; fon
   .tools-grid { grid-template-columns: 1fr; }
   .essay-card { padding: 1.25rem; }
 }
+
+/* ── Math Trainer (AI) ─────────────────────────────────── */
+.math-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-top: .6rem;
+}
+.suggestion-chip {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border: none;
+  border-radius: 999px;
+  padding: .25rem .75rem;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.suggestion-chip:hover { background: var(--primary); color: #fff; }
+
+.math-hint-details {
+  margin-top: .85rem;
+  font-size: .9rem;
+  color: var(--text-muted);
+}
+.math-hint-details summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+  list-style: none;
+}
+.math-hint-details summary::-webkit-details-marker { display: none; }
+.math-hint-details[open] summary { margin-bottom: .35rem; }
+
+/* ── AI Provider Picker ────────────────────────────────── */
+.ai-provider-tabs {
+  display: flex;
+  gap: .4rem;
+  flex-wrap: wrap;
+  margin-top: .5rem;
+}
+.ai-tab {
+  padding: .4rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: .85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.ai-tab:hover { border-color: var(--primary); color: var(--primary); }
+.ai-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
