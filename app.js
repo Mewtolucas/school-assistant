@@ -2524,6 +2524,11 @@ async function callAI(provider, apiKey, systemPrompt, userPrompt) {
 
 function renderEssayGrader(app) {
   const selectStyle = 'width:100%;padding:.55rem .75rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:1rem;background:var(--surface);color:var(--text)';
+  const sets = DB.getSets();
+  const setOptions = sets.length
+    ? sets.map(s => `<option value="${escHtml(s.id)}">${escHtml(s.name)} (${s.cards.length} cards)</option>`).join('')
+    : '<option value="" disabled>No flashcard sets saved yet</option>';
+
   app.innerHTML = `
     <div class="home-header">
       <div><h1>🧠 AI Essay Grader</h1><p>AI-generated questions graded by AI</p></div>
@@ -2532,8 +2537,21 @@ function renderEssayGrader(app) {
     <div class="form-card" style="max-width:640px;margin:0 auto">
       ${renderAIProviderSection()}
       <div class="form-group">
+        <label style="margin-bottom:.5rem;display:block">Question Source</label>
+        <div style="display:flex;gap:.5rem">
+          <button id="essay-src-topic" class="btn btn-primary btn-sm" onclick="essaySetSource('topic')">Custom Topic</button>
+          <button id="essay-src-set" class="btn btn-ghost btn-sm" onclick="essaySetSource('set')">From Flashcard Set</button>
+        </div>
+      </div>
+      <div id="essay-topic-group" class="form-group">
         <label for="essay-topic">Topic / Subject</label>
         <input id="essay-topic" type="text" placeholder="e.g. The American Civil War, Photosynthesis, Romeo and Juliet…" maxlength="200" />
+      </div>
+      <div id="essay-set-group" class="form-group" style="display:none">
+        <label for="essay-set-select">Flashcard Set</label>
+        <select id="essay-set-select" style="${selectStyle}">
+          ${setOptions}
+        </select>
       </div>
       <div class="form-group">
         <label for="essay-qcount">Number of Questions</label>
@@ -2548,26 +2566,56 @@ function renderEssayGrader(app) {
       <div id="essay-error" style="color:var(--danger);margin-top:.75rem;display:none"></div>
     </div>`;
 
+  window.essaySetSource = function(mode) {
+    const topicGrp = document.getElementById('essay-topic-group');
+    const setGrp   = document.getElementById('essay-set-group');
+    const btnTopic = document.getElementById('essay-src-topic');
+    const btnSet   = document.getElementById('essay-src-set');
+    if (mode === 'topic') {
+      topicGrp.style.display = '';
+      setGrp.style.display   = 'none';
+      btnTopic.className = 'btn btn-primary btn-sm';
+      btnSet.className   = 'btn btn-ghost btn-sm';
+    } else {
+      topicGrp.style.display = 'none';
+      setGrp.style.display   = '';
+      btnTopic.className = 'btn btn-ghost btn-sm';
+      btnSet.className   = 'btn btn-primary btn-sm';
+    }
+  };
+
   window.essayGenerate = async function() {
     const { provider, apiKey } = getAIConfig();
-    const topic  = document.getElementById('essay-topic').value.trim();
-    const qcount = parseInt(document.getElementById('essay-qcount').value, 10);
-    const errEl  = document.getElementById('essay-error');
+    const qcount  = parseInt(document.getElementById('essay-qcount').value, 10);
+    const errEl   = document.getElementById('essay-error');
+    const useSet  = document.getElementById('essay-set-group').style.display !== 'none';
     errEl.style.display = 'none';
 
     if (!apiKey) { errEl.textContent = 'Please enter your API key.'; errEl.style.display=''; return; }
-    if (!topic)  { errEl.textContent = 'Please enter a topic.'; errEl.style.display=''; return; }
+
+    let topic, systemPrompt, userPrompt;
+
+    if (useSet) {
+      const setId = document.getElementById('essay-set-select').value;
+      if (!setId) { errEl.textContent = 'Please select a flashcard set.'; errEl.style.display=''; return; }
+      const set = DB.getSetById(setId);
+      if (!set) { errEl.textContent = 'Flashcard set not found.'; errEl.style.display=''; return; }
+      topic = set.name;
+      const cardList = set.cards.slice(0, 60).map(c => `- ${c.front}: ${c.back}`).join('\n');
+      systemPrompt = 'You are a teacher creating open-ended essay questions based on flashcard study material. Respond only with a valid JSON array of question strings.';
+      userPrompt = `Here are flashcards from the set "${set.name}":\n${cardList}\n\nGenerate ${qcount} thoughtful open-ended questions that test deep understanding of this material. Questions should require paragraph responses (4–8 sentences) that demonstrate analysis, cause-and-effect reasoning, or the ability to connect multiple concepts from the cards.\nRespond with ONLY a JSON array: ["Question 1?", "Question 2?", ...]`;
+    } else {
+      topic = document.getElementById('essay-topic').value.trim();
+      if (!topic) { errEl.textContent = 'Please enter a topic.'; errEl.style.display=''; return; }
+      systemPrompt = 'You are a teacher creating open-ended essay questions for high school students. Respond only with a valid JSON array of question strings.';
+      userPrompt = `Generate ${qcount} thoughtful open-ended questions about: "${topic}".\nEach question should require a paragraph response (4–8 sentences) testing analysis, cause-and-effect, comparison, or evaluation.\nRespond with ONLY a JSON array: ["Question 1?", "Question 2?", ...]`;
+    }
 
     const btn = document.getElementById('essay-gen-btn');
     btn.textContent = 'Generating…'; btn.disabled = true;
 
     try {
-      const raw = await callAI(provider, apiKey,
-        'You are a teacher creating open-ended essay questions for high school students. Respond only with a valid JSON array of question strings.',
-        `Generate ${qcount} thoughtful open-ended questions about: "${topic}".
-Each question should require a paragraph response (4–8 sentences) testing analysis, cause-and-effect, comparison, or evaluation.
-Respond with ONLY a JSON array: ["Question 1?", "Question 2?", ...]`
-      );
+      const raw = await callAI(provider, apiKey, systemPrompt, userPrompt);
       let questions;
       try { questions = JSON.parse(raw.match(/\[[\s\S]*\]/)[0]); }
       catch { throw new Error('Could not parse questions from AI response. Try again.'); }
