@@ -1874,6 +1874,19 @@ const GREEK = {
 
 // Normalize a math answer for comparison: both sides get the same treatment
 // so equivalent-looking answers are treated as equal.
+// Canonicalize order of multiplicative factor groups so (x+3)(x+4) == (x+4)(x+3).
+// Only fires when the entire string is a sequence of (…) groups with nothing outside.
+function sortFactors(s) {
+  const groups = [];
+  let depth = 0, start = -1;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '(') { if (!depth++) start = i; }
+    else if (s[i] === ')' && depth && !--depth) groups.push(s.slice(start, i + 1));
+  }
+  if (groups.length < 2 || groups.join('') !== s) return s;
+  return groups.sort().join('');
+}
+
 function normalizeMath(s) {
   let t = String(s).trim().toLowerCase();
   // Greek letter words → symbol (must happen before space-removal)
@@ -1881,19 +1894,19 @@ function normalizeMath(s) {
     t = t.replace(new RegExp(`\\b${name}\\b`, 'g'), sym);
   }
   // Word separators → nothing (before space-strip so \b works)
-  // "x=2 or x=3", "x=2 and y=3" all treated the same as "x=2,y=3"
   t = t.replace(/\bor\b/g, '');
   t = t.replace(/\band\b/g, '');
   // Unicode √ → text "sqrt" so all sqrt forms unify
   t = t.replace(/√/g, 'sqrt');
-  // Strip all whitespace, commas, semicolons — so "(2, 3)", "(2,3)", "2 3"
-  // and "x=2 y=3", "x=2,y=3", "x=2; y=3" all collapse to the same form
+  // Strip all whitespace, commas, semicolons
   t = t.replace(/[\s,;]+/g, '');
   // Normalize operators
   t = t.replace(/[×✕⋅]/g, '*');
   t = t.replace(/÷/g, '/');
-  // sqrt(x) → sqrtx  for simple single-token args (sqrt(5) == sqrt5 == √5)
+  // sqrt(x) → sqrtx  for simple single-token args
   t = t.replace(/sqrt\(([a-z0-9]+)\)/g, 'sqrt$1');
+  // Sort factor order: (x+3)(x+4) == (x+4)(x+3)
+  t = sortFactors(t);
   return t;
 }
 
@@ -1990,10 +2003,11 @@ Rules:
 - Answers should be concise (a number, expression, or short phrase)
 - Include a short hint for each problem
 - Include a "format" field that tells the student exactly how to write their answer (e.g. "Enter as a decimal rounded to 2 places", "Write both solutions as x = ___ or x = ___", "Give as a simplified fraction", "List coordinates as (x, y)", "Enter the exact value — you can type sqrt() for roots")
+- Include an "alternates" array listing every other valid form of the answer (e.g. different factor orderings, equivalent expressions, decimal vs fraction). Use [] if there are none.
 - Match the difficulty: easy = straightforward, medium = requires a few steps, hard = multi-step or conceptual
 
 Respond with ONLY a JSON array:
-[{"question": "Solve: x² - 5x + 6 = 0", "answer": "x = 2 or x = 3", "hint": "Factor into (x-a)(x-b)", "format": "Write both solutions as x = ___ or x = ___"}, ...]`
+[{"question": "Factor: x² + 7x + 12", "answer": "(x + 3)(x + 4)", "alternates": ["(x + 4)(x + 3)"], "hint": "Find two numbers that multiply to 12 and add to 7", "format": "Write as a product of two binomials"}, ...]`
       );
 
       let questions;
@@ -2077,7 +2091,9 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
       const val = inp2.value.trim();
       if (!val) { showToast('Enter an answer first.'); return; }
 
-      const isCorrect = normalizeMath(val) === normalizeMath(item.answer);
+      const allAnswers = [item.answer, ...(Array.isArray(item.alternates) ? item.alternates : [])];
+      const normVal   = normalizeMath(val);
+      const isCorrect = allAnswers.some(a => normVal === normalizeMath(a));
 
       if (isCorrect) score++; else wrong++;
       inp2.disabled = true;
@@ -2086,9 +2102,13 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
 
       const fb = document.getElementById('math-feedback');
       fb.className = `written-feedback ${isCorrect ? 'correct' : 'wrong'}`;
-      fb.innerHTML = isCorrect
-        ? '✓ Correct!'
-        : `✗ Incorrect — answer: <strong>${escHtml(prettyMath(item.answer))}</strong>`;
+      if (isCorrect) {
+        fb.innerHTML = '✓ Correct!';
+      } else {
+        const extras = (item.alternates || []).map(a => `<li>${escHtml(prettyMath(a))}</li>`).join('');
+        fb.innerHTML = `✗ Incorrect — accepted answer${item.alternates?.length ? 's' : ''}:<ul style="margin:.35rem 0 0 1.1rem;padding:0">
+          <li><strong>${escHtml(prettyMath(item.answer))}</strong></li>${extras}</ul>`;
+      }
 
       document.getElementById('math-next').style.display = 'flex';
     };
