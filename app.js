@@ -1862,6 +1862,55 @@ function runMCQuiz(app, pool, getQuestion, getCorrect, getOptions, label, mode, 
 }
 
 /* ═══════════════════════════════════════════════════════════
+   MATH HELPERS  (shared by Math Trainer + Math Quiz)
+   ═══════════════════════════════════════════════════════════ */
+
+// Greek letter name → symbol map (used in both normalization and display)
+const GREEK = {
+  theta:'θ', alpha:'α', beta:'β', gamma:'γ', delta:'δ', epsilon:'ε',
+  lambda:'λ', mu:'μ', phi:'φ', omega:'ω', sigma:'σ', pi:'π',
+  rho:'ρ', tau:'τ', psi:'ψ', eta:'η', nu:'ν', xi:'ξ', zeta:'ζ'
+};
+
+// Normalize a math answer for comparison: both sides get the same treatment
+// so equivalent-looking answers are treated as equal.
+function normalizeMath(s) {
+  let t = String(s).trim().toLowerCase();
+  // Greek letter words → symbol (must happen before space-removal)
+  for (const [name, sym] of Object.entries(GREEK)) {
+    t = t.replace(new RegExp(`\\b${name}\\b`, 'g'), sym);
+  }
+  // "x = 2 or x = 3"  →  "x=2,x=3"  (before space removal)
+  t = t.replace(/\bor\b/g, ',');
+  // Unicode √ → text "sqrt" so all sqrt forms unify
+  t = t.replace(/√/g, 'sqrt');
+  // Strip all whitespace
+  t = t.replace(/\s+/g, '');
+  // Normalize operators
+  t = t.replace(/[×✕⋅]/g, '*');
+  t = t.replace(/÷/g, '/');
+  // sqrt(x) → sqrtx  for simple single-token args (sqrt(5) == sqrt5 == √5)
+  t = t.replace(/sqrt\(([a-z0-9]+)\)/g, 'sqrt$1');
+  return t;
+}
+
+// Pretty-print a math string for display: converts text notation to symbols
+function prettyMath(s) {
+  let t = String(s);
+  // sqrt(x) → √x  (simple single-arg cases first, then complex)
+  t = t.replace(/sqrt\(([^)]+)\)/gi, (_, arg) => `√(${arg})`);
+  t = t.replace(/√\((\w+)\)/g, '√$1'); // √(5) → √5 when arg is simple
+  // Unicode √ with no parens already looks fine
+  // Greek letter words → symbols (case-insensitive, whole-word only)
+  for (const [name, sym] of Object.entries(GREEK)) {
+    t = t.replace(new RegExp(`\\b${name}\\b`, 'gi'), sym);
+  }
+  // Common exponent shorthands
+  t = t.replace(/\^2\b/g, '²').replace(/\^3\b/g, '³');
+  return t;
+}
+
+/* ═══════════════════════════════════════════════════════════
    MATH TRAINER
    ═══════════════════════════════════════════════════════════ */
 function renderMathHub(app) {
@@ -1979,17 +2028,20 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
       </div>
       <div class="quiz-card">
         <div class="quiz-question" style="font-size:1.25rem;font-family:monospace;letter-spacing:.02em;line-height:1.6">
-          ${escHtml(item.question)}
+          ${escHtml(prettyMath(item.question))}
         </div>
         ${item.hint ? `
         <details class="math-hint-details">
           <summary>💡 Show hint</summary>
-          <span>${escHtml(item.hint)}</span>
+          <span>${escHtml(prettyMath(item.hint))}</span>
         </details>` : ''}
         <div class="written-input-wrap" style="margin-top:1.25rem">
           <input id="math-answer" type="text" class="written-answer-input"
             placeholder="Your answer…" autocomplete="off" />
           <button class="btn btn-primary btn-wide" id="math-check-btn" onclick="mathAISubmit()">Check</button>
+        </div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">
+          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π · <code>(2, 3)</code> or <code>(2,3)</code> both work
         </div>
         <div id="math-feedback" class="written-feedback"></div>
         <div id="math-next" class="quiz-next" style="display:none">
@@ -2009,13 +2061,7 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
       const val = inp2.value.trim();
       if (!val) { showToast('Enter an answer first.'); return; }
 
-      // Normalize: lowercase, strip spaces, normalize common math notation
-      const norm = s => s.toLowerCase()
-        .replace(/\s+/g, '')
-        .replace(/[×✕]/g, '*')
-        .replace(/[÷]/g, '/')
-        .replace(/or/g, ',');
-      const isCorrect = norm(val) === norm(item.answer);
+      const isCorrect = normalizeMath(val) === normalizeMath(item.answer);
 
       if (isCorrect) score++; else wrong++;
       inp2.disabled = true;
@@ -2026,7 +2072,7 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
       fb.className = `written-feedback ${isCorrect ? 'correct' : 'wrong'}`;
       fb.innerHTML = isCorrect
         ? '✓ Correct!'
-        : `✗ Incorrect — answer: <strong>${escHtml(item.answer)}</strong>`;
+        : `✗ Incorrect — answer: <strong>${escHtml(prettyMath(item.answer))}</strong>`;
 
       document.getElementById('math-next').style.display = 'flex';
     };
@@ -2138,11 +2184,14 @@ function renderMathQuiz(app, mode) {
         <div class="progress-bar"><div class="progress-bar-fill" style="width:${Math.round(idx/TOTAL*100)}%"></div></div>
       </div>
       <div class="quiz-card">
-        <div class="quiz-question" style="font-size:1.6rem;font-family:monospace;letter-spacing:.02em">${escHtml(q)}</div>
+        <div class="quiz-question" style="font-size:1.6rem;font-family:monospace;letter-spacing:.02em">${escHtml(prettyMath(q))}</div>
         <div class="written-input-wrap">
           <input id="math-answer" type="text" class="written-answer-input"
             placeholder="Your answer…" autocomplete="off" inputmode="decimal" />
           <button class="btn btn-primary btn-wide" onclick="mathSubmit('${escAttr(correctAns)}')">Check</button>
+        </div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">
+          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π
         </div>
         <div id="math-feedback" class="written-feedback"></div>
         <div id="math-next" class="quiz-next" style="display:none">
@@ -2160,15 +2209,15 @@ function renderMathQuiz(app, mode) {
   window.mathSubmit = function(correctAns) {
     const inp = document.getElementById('math-answer');
     if (!inp || inp.disabled) return;
-    const val = inp.value.trim().replace(/\s/g,'');
+    const val = inp.value.trim();
     if (!val) { showToast('Enter an answer first.'); return; }
-    const isCorrect = val.toLowerCase() === correctAns.toLowerCase();
+    const isCorrect = normalizeMath(val) === normalizeMath(correctAns);
     if (isCorrect) score++; else wrong++;
     inp.disabled = true;
     inp.classList.add(isCorrect ? 'written-correct' : 'written-wrong');
     const fb = document.getElementById('math-feedback');
     fb.className = `written-feedback ${isCorrect ? 'correct' : 'wrong'}`;
-    fb.innerHTML = isCorrect ? '✓ Correct!' : `✗ Incorrect — answer: <strong>${escHtml(correctAns)}</strong>`;
+    fb.innerHTML = isCorrect ? '✓ Correct!' : `✗ Incorrect — answer: <strong>${escHtml(prettyMath(correctAns))}</strong>`;
     document.getElementById('math-next').style.display = 'flex';
   };
 
