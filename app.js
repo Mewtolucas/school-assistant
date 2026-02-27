@@ -1986,10 +1986,11 @@ Rules:
 - Each problem must have one clear, unambiguous answer
 - Answers should be concise (a number, expression, or short phrase)
 - Include a short hint for each problem
+- Include a "format" field that tells the student exactly how to write their answer (e.g. "Enter as a decimal rounded to 2 places", "Write both solutions as x = ___ or x = ___", "Give as a simplified fraction", "List coordinates as (x, y)", "Enter the exact value — you can type sqrt() for roots")
 - Match the difficulty: easy = straightforward, medium = requires a few steps, hard = multi-step or conceptual
 
 Respond with ONLY a JSON array:
-[{"question": "Solve: x² - 5x + 6 = 0", "answer": "x = 2 or x = 3", "hint": "Factor into (x-a)(x-b)"}, ...]`
+[{"question": "Solve: x² - 5x + 6 = 0", "answer": "x = 2 or x = 3", "hint": "Factor into (x-a)(x-b)", "format": "Write both solutions as x = ___ or x = ___"}, ...]`
       );
 
       let questions;
@@ -2030,6 +2031,10 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
         <div class="quiz-question" style="font-size:1.25rem;font-family:monospace;letter-spacing:.02em;line-height:1.6">
           ${escHtml(prettyMath(item.question))}
         </div>
+        ${item.format ? `
+        <div style="display:inline-flex;align-items:center;gap:.4rem;margin:.75rem 0 0;padding:.35rem .65rem;background:var(--primary-soft,rgba(99,102,241,.1));border-radius:var(--radius-sm);font-size:.82rem;font-weight:600;color:var(--primary)">
+          ✎ Format: <span style="font-weight:400">${escHtml(prettyMath(item.format))}</span>
+        </div>` : ''}
         ${item.hint ? `
         <details class="math-hint-details">
           <summary>💡 Show hint</summary>
