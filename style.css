@@ -857,6 +857,35 @@ textarea { min-height: 240px; font-family: 'SF Mono', 'Consolas', monospace; fon
 }
 .suggestion-chip:hover { background: var(--primary); color: #fff; }
 
+.math-answer-preview {
+  padding: .5rem .75rem;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  font-family: monospace;
+  font-size: 1rem;
+  min-height: 2.35rem;
+  color: var(--text);
+  letter-spacing: .02em;
+  line-height: 1.5;
+  margin-bottom: .5rem;
+}
+.math-answer-preview .preview-label {
+  display: block;
+  font-size: .62rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  font-family: system-ui, sans-serif;
+  font-weight: 700;
+  margin-bottom: .15rem;
+}
+.math-answer-preview .preview-value:empty::before {
+  content: '—';
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .math-hint-details {
   margin-top: .85rem;
   font-size: .9rem;

@@ -1880,12 +1880,15 @@ function normalizeMath(s) {
   for (const [name, sym] of Object.entries(GREEK)) {
     t = t.replace(new RegExp(`\\b${name}\\b`, 'g'), sym);
   }
-  // "x = 2 or x = 3"  →  "x=2,x=3"  (before space removal)
-  t = t.replace(/\bor\b/g, ',');
+  // Word separators → nothing (before space-strip so \b works)
+  // "x=2 or x=3", "x=2 and y=3" all treated the same as "x=2,y=3"
+  t = t.replace(/\bor\b/g, '');
+  t = t.replace(/\band\b/g, '');
   // Unicode √ → text "sqrt" so all sqrt forms unify
   t = t.replace(/√/g, 'sqrt');
-  // Strip all whitespace
-  t = t.replace(/\s+/g, '');
+  // Strip all whitespace, commas, semicolons — so "(2, 3)", "(2,3)", "2 3"
+  // and "x=2 y=3", "x=2,y=3", "x=2; y=3" all collapse to the same form
+  t = t.replace(/[\s,;]+/g, '');
   // Normalize operators
   t = t.replace(/[×✕⋅]/g, '*');
   t = t.replace(/÷/g, '/');
@@ -2040,13 +2043,17 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
           <summary>💡 Show hint</summary>
           <span>${escHtml(prettyMath(item.hint))}</span>
         </details>` : ''}
-        <div class="written-input-wrap" style="margin-top:1.25rem">
+        <div class="math-answer-preview" id="math-preview" style="margin-top:1.25rem">
+          <span class="preview-label">What you're submitting</span>
+          <span class="preview-value" id="math-preview-val"></span>
+        </div>
+        <div class="written-input-wrap">
           <input id="math-answer" type="text" class="written-answer-input"
             placeholder="Your answer…" autocomplete="off" />
           <button class="btn btn-primary btn-wide" id="math-check-btn" onclick="mathAISubmit()">Check</button>
         </div>
         <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">
-          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π · <code>(2, 3)</code> or <code>(2,3)</code> both work
+          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π · spaces &amp; commas ignored
         </div>
         <div id="math-feedback" class="written-feedback"></div>
         <div id="math-next" class="quiz-next" style="display:none">
@@ -2059,6 +2066,10 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
     const inp = document.getElementById('math-answer');
     inp.focus();
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') mathAISubmit(); });
+    inp.addEventListener('input', () => {
+      const el = document.getElementById('math-preview-val');
+      if (el) el.textContent = prettyMath(inp.value);
+    });
 
     window.mathAISubmit = function() {
       const inp2 = document.getElementById('math-answer');
@@ -2190,13 +2201,17 @@ function renderMathQuiz(app, mode) {
       </div>
       <div class="quiz-card">
         <div class="quiz-question" style="font-size:1.6rem;font-family:monospace;letter-spacing:.02em">${escHtml(prettyMath(q))}</div>
+        <div class="math-answer-preview" id="math-preview">
+          <span class="preview-label">What you're submitting</span>
+          <span class="preview-value" id="math-preview-val"></span>
+        </div>
         <div class="written-input-wrap">
           <input id="math-answer" type="text" class="written-answer-input"
             placeholder="Your answer…" autocomplete="off" inputmode="decimal" />
           <button class="btn btn-primary btn-wide" onclick="mathSubmit('${escAttr(correctAns)}')">Check</button>
         </div>
         <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">
-          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π
+          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π · spaces &amp; commas ignored
         </div>
         <div id="math-feedback" class="written-feedback"></div>
         <div id="math-next" class="quiz-next" style="display:none">
@@ -2209,6 +2224,10 @@ function renderMathQuiz(app, mode) {
     const inp = document.getElementById('math-answer');
     inp.focus();
     inp.addEventListener('keydown', e => { if (e.key==='Enter') mathSubmit(correctAns); });
+    inp.addEventListener('input', () => {
+      const el = document.getElementById('math-preview-val');
+      if (el) el.textContent = prettyMath(inp.value);
+    });
   }
 
   window.mathSubmit = function(correctAns) {
