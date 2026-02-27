@@ -2085,6 +2085,8 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
       if (el) el.textContent = prettyMath(inp.value);
     });
 
+    let attempts = 0;
+
     window.mathAISubmit = function() {
       const inp2 = document.getElementById('math-answer');
       if (!inp2 || inp2.disabled) return;
@@ -2092,25 +2094,39 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
       if (!val) { showToast('Enter an answer first.'); return; }
 
       const allAnswers = [item.answer, ...(Array.isArray(item.alternates) ? item.alternates : [])];
-      const normVal   = normalizeMath(val);
-      const isCorrect = allAnswers.some(a => normVal === normalizeMath(a));
-
-      if (isCorrect) score++; else wrong++;
-      inp2.disabled = true;
-      inp2.classList.add(isCorrect ? 'written-correct' : 'written-wrong');
-      document.getElementById('math-check-btn').disabled = true;
+      const isCorrect  = allAnswers.some(a => normalizeMath(val) === normalizeMath(a));
+      attempts++;
 
       const fb = document.getElementById('math-feedback');
-      fb.className = `written-feedback ${isCorrect ? 'correct' : 'wrong'}`;
+
       if (isCorrect) {
-        fb.innerHTML = '✓ Correct!';
+        score++;
+        inp2.disabled = true;
+        inp2.classList.add('written-correct');
+        document.getElementById('math-check-btn').disabled = true;
+        fb.className  = 'written-feedback correct';
+        fb.innerHTML  = attempts === 1 ? '✓ Correct!' : '✓ Correct on your second try!';
+        document.getElementById('math-next').style.display = 'flex';
+      } else if (attempts < 2) {
+        // First wrong attempt — let them try once more
+        fb.className = 'written-feedback try-again';
+        fb.innerHTML = '✗ Not quite — try again!';
+        inp2.value   = '';
+        const prevEl = document.getElementById('math-preview-val');
+        if (prevEl) prevEl.textContent = '';
+        inp2.focus();
       } else {
+        // Second wrong attempt — reveal the answer
+        wrong++;
+        inp2.disabled = true;
+        inp2.classList.add('written-wrong');
+        document.getElementById('math-check-btn').disabled = true;
+        fb.className = 'written-feedback wrong';
         const extras = (item.alternates || []).map(a => `<li>${escHtml(prettyMath(a))}</li>`).join('');
         fb.innerHTML = `✗ Incorrect — accepted answer${item.alternates?.length ? 's' : ''}:<ul style="margin:.35rem 0 0 1.1rem;padding:0">
           <li><strong>${escHtml(prettyMath(item.answer))}</strong></li>${extras}</ul>`;
+        document.getElementById('math-next').style.display = 'flex';
       }
-
-      document.getElementById('math-next').style.display = 'flex';
     };
 
     window.mathAINext = function() { idx++; renderQ(); };
