@@ -658,8 +658,37 @@ textarea { min-height: 240px; font-family: 'SF Mono', 'Consolas', monospace; fon
   font-size: .95rem; font-weight: 600;
   min-height: 1.4em;
 }
-.written-feedback.correct { color: var(--success); }
-.written-feedback.wrong   { color: var(--danger); }
+.written-feedback.correct   { color: var(--success); }
+.written-feedback.wrong     { color: var(--danger); }
+.written-feedback.try-again { color: #92400e; }
+
+/* ── Listing tool ──────────────────────────────────────── */
+.listing-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+.listing-item {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .3rem .75rem;
+  border-radius: var(--r);
+  font-size: .88rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.listing-item-recalled {
+  background: var(--success-light);
+  color: #15803d;
+  border: 1.5px solid var(--success);
+}
+.listing-item-missed {
+  background: var(--danger-light);
+  color: #b91c1c;
+  border: 1.5px solid var(--danger);
+}
+.listing-item-mark { font-weight: 700; }
 
 /* ── Quiz insufficient-cards screen ───────────────────── */
 .info-screen {
@@ -856,6 +885,35 @@ textarea { min-height: 240px; font-family: 'SF Mono', 'Consolas', monospace; fon
   transition: background .15s;
 }
 .suggestion-chip:hover { background: var(--primary); color: #fff; }
+
+.math-answer-preview {
+  padding: .5rem .75rem;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  font-family: monospace;
+  font-size: 1rem;
+  min-height: 2.35rem;
+  color: var(--text);
+  letter-spacing: .02em;
+  line-height: 1.5;
+  margin-bottom: .5rem;
+}
+.math-answer-preview .preview-label {
+  display: block;
+  font-size: .62rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  font-family: system-ui, sans-serif;
+  font-weight: 700;
+  margin-bottom: .15rem;
+}
+.math-answer-preview .preview-value:empty::before {
+  content: '—';
+  color: var(--text-muted);
+  font-style: italic;
+}
 
 .math-hint-details {
   margin-top: .85rem;

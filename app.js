@@ -245,6 +245,7 @@ function render() {
     case 'study':     renderStudy(app, param);        break;
     case 'quiz':      renderQuiz(app, param);         break;
     case 'written':   renderWrittenQuiz(app, param);  break;
+    case 'listing':   renderListing(app, param);      break;
     case 'shared':    renderShared(app, param);       break;
     case 'tools':     renderToolsHub(app);            break;
     case 'geo':       renderGeoHub(app);              break;
@@ -318,6 +319,7 @@ function renderHome(app) {
           <button class="btn btn-primary btn-sm" onclick="navigate('study/${set.id}')">Study</button>
           <button class="btn btn-outline btn-sm" onclick="navigate('quiz/${set.id}')">Quiz</button>
           <button class="btn btn-outline btn-sm" onclick="navigate('written/${set.id}')">Written</button>
+          <button class="btn btn-outline btn-sm" onclick="navigate('listing/${set.id}')">Listing</button>
           <button class="btn btn-ghost btn-sm" onclick="navigate('edit/${set.id}')">Edit</button>
           ${set.isPublic
             ? `<button class="btn btn-ghost btn-sm" onclick="openShare('${set.id}')">Share</button>`
@@ -579,11 +581,12 @@ function renderStudy(app, setId) {
   let flipped  = false;
   let gotIt    = 0;
   let learning = 0;
-  const answered = new Set();
+  const gotItSet = new Set(); // tracks cards marked "Got It" — no re-marking allowed
 
   function cardHtml(card, idx) {
-    const mastery = DB.getMastery(set);
-    const progress = answered.size ? Math.round((answered.size / cards.length) * 100) : 0;
+    const mastery  = DB.getMastery(set);
+    const progress = gotItSet.size ? Math.round((gotItSet.size / cards.length) * 100) : 0;
+    const isDone   = gotItSet.has(card.id);
 
     return `
       <div class="study-header">
@@ -616,10 +619,10 @@ function renderStudy(app, setId) {
       </div>
 
       <div class="study-feedback-btns">
-        <button class="btn btn-danger" onclick="markCard(false)" title="Still learning">
+        <button class="btn btn-danger" onclick="markCard(false)" title="Still learning" ${isDone ? 'disabled' : ''}>
           ✗ Still Learning
         </button>
-        <button class="btn btn-success" onclick="markCard(true)" title="Got it">
+        <button class="btn btn-success" onclick="markCard(true)" title="Got it" ${isDone ? 'disabled' : ''}>
           ✓ Got It
         </button>
       </div>
@@ -628,7 +631,7 @@ function renderStudy(app, setId) {
         <div class="progress-bar-wrap" style="margin-top:1.5rem">
           <div class="progress-bar-label">
             <span>Session progress</span>
-            <span>${answered.size}/${cards.length} answered</span>
+            <span>${gotItSet.size}/${cards.length} got it</span>
           </div>
           <div class="progress-bar">
             <div class="progress-bar-fill" style="width:${progress}%"></div>
@@ -643,26 +646,22 @@ function renderStudy(app, setId) {
   }
 
   function renderCard() {
-    if (current >= cards.length) {
-      showComplete();
-      return;
-    }
+    if (current >= cards.length) { current = 0; }
     app.innerHTML = cardHtml(cards[current], current);
     flipped = false;
   }
 
   function showComplete() {
-    const pct = cards.length ? Math.round(gotIt / cards.length * 100) : 0;
     app.innerHTML = `
       <div class="study-complete">
         <div style="font-size:2.5rem">🎉</div>
         <h2>Session Complete!</h2>
         <p>You went through all ${cards.length} cards.</p>
-        <div class="big-score">${pct}%</div>
         <p style="margin-bottom:1.5rem"><strong style="color:var(--success)">${gotIt}</strong> got it &nbsp;·&nbsp; <strong style="color:var(--danger)">${learning}</strong> still learning</p>
         <div class="complete-actions">
           <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
           <button class="btn btn-outline" onclick="navigate('study/${setId}')">Study Again</button>
+          <button class="btn btn-outline" onclick="navigate('listing/${setId}')">Listing</button>
           <button class="btn btn-primary" onclick="navigate('quiz/${setId}')">Take Quiz</button>
         </div>
       </div>`;
@@ -683,12 +682,28 @@ function renderStudy(app, setId) {
   };
 
   window.markCard = function(correct) {
-    DB.recordCardAnswer(setId, cards[current].id, correct);
-    answered.add(cards[current].id);
-    if (correct) gotIt++; else learning++;
-    // Move to next
-    if (current < cards.length - 1) { current++; renderCard(); }
-    else showComplete();
+    const cardId = cards[current].id;
+    if (gotItSet.has(cardId)) return; // prevent re-marking an already "Got It" card
+
+    DB.recordCardAnswer(setId, cardId, correct);
+
+    if (correct) {
+      gotItSet.add(cardId);
+      gotIt++;
+      if (gotIt === cards.length) { showComplete(); return; }
+    } else {
+      learning++;
+    }
+
+    // Advance to the next card that hasn't been "Got It" yet (wrap around if needed)
+    for (let i = 1; i <= cards.length; i++) {
+      const candidate = (current + i) % cards.length;
+      if (!gotItSet.has(cards[candidate].id)) {
+        current = candidate;
+        break;
+      }
+    }
+    renderCard();
   };
 
   renderCard();
@@ -1175,6 +1190,178 @@ function renderWrittenQuiz(app, setId) {
   }
 
   renderQuestion();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LISTING TOOL
+   ═══════════════════════════════════════════════════════════ */
+function renderListing(app, setId) {
+  const set = DB.getSetById(setId);
+  if (!set) { navigate('home'); return; }
+
+  const cards = set.cards;
+  if (cards.length === 0) {
+    app.innerHTML = `
+      <div class="info-screen">
+        <div style="font-size:2.5rem">📚</div>
+        <h2>No Cards</h2>
+        <p>Add cards to this set before using Listing.</p>
+        <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
+          <button class="btn btn-primary" onclick="navigate('edit/${setId}')">Edit Set</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const recalled = new Set(); // card IDs marked as recalled
+  let finished = false;
+
+  function normalize(s) {
+    return String(s).trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+  }
+
+  function renderMain() {
+    const progress     = Math.round((recalled.size / cards.length) * 100);
+    const recalledCards = cards.filter(c => recalled.has(c.id));
+
+    const itemsHtml = recalledCards.length
+      ? recalledCards.map(c => `
+          <div class="listing-item listing-item-recalled">
+            <span class="listing-item-mark">✓</span>
+            <span>${escHtml(c.front)}</span>
+          </div>`).join('')
+      : `<p style="color:var(--text-muted);font-size:.9rem;margin:.5rem 0">Nothing recalled yet — start typing!</p>`;
+
+    app.innerHTML = `
+      <div class="study-header">
+        <div>
+          <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">Listing</div>
+          <h2>${escHtml(set.name)}</h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('home')">← Back</button>
+      </div>
+
+      <div style="max-width:640px;margin:0 auto">
+        <div class="progress-bar-wrap" style="margin-bottom:1.25rem">
+          <div class="progress-bar-label">
+            <span>${recalled.size} / ${cards.length} recalled</span>
+            <span>${cards.length - recalled.size} remaining</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" style="width:${progress}%"></div>
+          </div>
+        </div>
+
+        <div class="quiz-card" style="margin-bottom:1rem">
+          <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:.75rem;text-align:center">
+            Name all the items in this set from memory. Type each one and press Enter.
+          </p>
+          <div style="display:flex;gap:.5rem">
+            <input id="listing-input" type="text" class="written-answer-input"
+              placeholder="Type an item…" autocomplete="off" spellcheck="false" style="flex:1" />
+            <button class="btn btn-primary" onclick="listingSubmit()">Enter</button>
+          </div>
+          <div id="listing-feedback" class="written-feedback" style="margin-top:.5rem"></div>
+        </div>
+
+        <div class="listing-grid">${itemsHtml}</div>
+
+        <div style="display:flex;justify-content:center;margin-top:1.5rem">
+          <button class="btn btn-ghost" onclick="listingGiveUp()">Give Up — Show Answers</button>
+        </div>
+      </div>`;
+
+    const inp = document.getElementById('listing-input');
+    if (inp) {
+      inp.focus();
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') listingSubmit(); });
+    }
+  }
+
+  function showResults(gaveUp) {
+    finished = true;
+    const recalledCards = cards.filter(c =>  recalled.has(c.id));
+    const missedCards   = cards.filter(c => !recalled.has(c.id));
+
+    const recalledHtml = recalledCards.map(c => `
+      <div class="listing-item listing-item-recalled">
+        <span class="listing-item-mark">✓</span>
+        <span>${escHtml(c.front)}</span>
+      </div>`).join('');
+
+    const missedHtml = missedCards.map(c => `
+      <div class="listing-item listing-item-missed">
+        <span class="listing-item-mark">✗</span>
+        <span>${escHtml(c.front)}</span>
+      </div>`).join('');
+
+    app.innerHTML = `
+      <div class="study-complete" style="max-width:560px">
+        <div style="font-size:2.5rem">${gaveUp ? '📋' : '🎉'}</div>
+        <h2>${gaveUp ? 'Session Ended' : 'All Recalled!'}</h2>
+        <p style="margin-bottom:1rem">
+          <strong style="color:var(--success)">${recalledCards.length}</strong> recalled &nbsp;·&nbsp;
+          <strong style="color:${missedCards.length ? 'var(--danger)' : 'var(--success)'}">${missedCards.length}</strong> missed
+        </p>
+
+        ${recalledCards.length ? `
+        <div style="text-align:left;margin-bottom:1rem">
+          <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:.4rem">Recalled</div>
+          <div class="listing-grid">${recalledHtml}</div>
+        </div>` : ''}
+
+        ${missedCards.length ? `
+        <div style="text-align:left;margin-bottom:1.5rem">
+          <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:.4rem">Missed</div>
+          <div class="listing-grid">${missedHtml}</div>
+        </div>` : ''}
+
+        <div class="complete-actions">
+          <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
+          <button class="btn btn-outline" onclick="navigate('listing/${setId}')">Try Again</button>
+          <button class="btn btn-primary" onclick="navigate('quiz/${setId}')">Take Quiz</button>
+        </div>
+      </div>`;
+  }
+
+  window.listingSubmit = function() {
+    if (finished) return;
+    const inp = document.getElementById('listing-input');
+    if (!inp) return;
+    const val = inp.value.trim();
+    if (!val) return;
+
+    const normVal = normalize(val);
+    const match = cards.find(c => !recalled.has(c.id) && normalize(c.front) === normVal);
+    const fb = document.getElementById('listing-feedback');
+
+    if (match) {
+      recalled.add(match.id);
+      inp.value = '';
+      if (recalled.size === cards.length) { showResults(false); return; }
+      renderMain();
+      // Flash success on the freshly-rendered feedback element
+      const newFb = document.getElementById('listing-feedback');
+      if (newFb) {
+        newFb.className = 'written-feedback correct';
+        newFb.textContent = `✓ "${match.front}"`;
+        setTimeout(() => { if (newFb) { newFb.className = 'written-feedback'; newFb.textContent = ''; } }, 1500);
+      }
+    } else {
+      const alreadyGot = cards.some(c => recalled.has(c.id) && normalize(c.front) === normVal);
+      if (fb) {
+        fb.className = 'written-feedback try-again';
+        fb.textContent = alreadyGot ? `Already recalled!` : `Not in this set.`;
+        setTimeout(() => { if (fb) { fb.className = 'written-feedback'; fb.textContent = ''; } }, 1500);
+      }
+      inp.select();
+    }
+  };
+
+  window.listingGiveUp = function() { showResults(true); };
+
+  renderMain();
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1874,23 +2061,39 @@ const GREEK = {
 
 // Normalize a math answer for comparison: both sides get the same treatment
 // so equivalent-looking answers are treated as equal.
+// Canonicalize order of multiplicative factor groups so (x+3)(x+4) == (x+4)(x+3).
+// Only fires when the entire string is a sequence of (…) groups with nothing outside.
+function sortFactors(s) {
+  const groups = [];
+  let depth = 0, start = -1;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '(') { if (!depth++) start = i; }
+    else if (s[i] === ')' && depth && !--depth) groups.push(s.slice(start, i + 1));
+  }
+  if (groups.length < 2 || groups.join('') !== s) return s;
+  return groups.sort().join('');
+}
+
 function normalizeMath(s) {
   let t = String(s).trim().toLowerCase();
   // Greek letter words → symbol (must happen before space-removal)
   for (const [name, sym] of Object.entries(GREEK)) {
     t = t.replace(new RegExp(`\\b${name}\\b`, 'g'), sym);
   }
-  // "x = 2 or x = 3"  →  "x=2,x=3"  (before space removal)
-  t = t.replace(/\bor\b/g, ',');
+  // Word separators → nothing (before space-strip so \b works)
+  t = t.replace(/\bor\b/g, '');
+  t = t.replace(/\band\b/g, '');
   // Unicode √ → text "sqrt" so all sqrt forms unify
   t = t.replace(/√/g, 'sqrt');
-  // Strip all whitespace
-  t = t.replace(/\s+/g, '');
+  // Strip all whitespace, commas, semicolons
+  t = t.replace(/[\s,;]+/g, '');
   // Normalize operators
   t = t.replace(/[×✕⋅]/g, '*');
   t = t.replace(/÷/g, '/');
-  // sqrt(x) → sqrtx  for simple single-token args (sqrt(5) == sqrt5 == √5)
+  // sqrt(x) → sqrtx  for simple single-token args
   t = t.replace(/sqrt\(([a-z0-9]+)\)/g, 'sqrt$1');
+  // Sort factor order: (x+3)(x+4) == (x+4)(x+3)
+  t = sortFactors(t);
   return t;
 }
 
@@ -1987,10 +2190,11 @@ Rules:
 - Answers should be concise (a number, expression, or short phrase)
 - Include a short hint for each problem
 - Include a "format" field that tells the student exactly how to write their answer (e.g. "Enter as a decimal rounded to 2 places", "Write both solutions as x = ___ or x = ___", "Give as a simplified fraction", "List coordinates as (x, y)", "Enter the exact value — you can type sqrt() for roots")
+- Include an "alternates" array listing every other valid form of the answer (e.g. different factor orderings, equivalent expressions, decimal vs fraction). Use [] if there are none.
 - Match the difficulty: easy = straightforward, medium = requires a few steps, hard = multi-step or conceptual
 
 Respond with ONLY a JSON array:
-[{"question": "Solve: x² - 5x + 6 = 0", "answer": "x = 2 or x = 3", "hint": "Factor into (x-a)(x-b)", "format": "Write both solutions as x = ___ or x = ___"}, ...]`
+[{"question": "Factor: x² + 7x + 12", "answer": "(x + 3)(x + 4)", "alternates": ["(x + 4)(x + 3)"], "hint": "Find two numbers that multiply to 12 and add to 7", "format": "Write as a product of two binomials"}, ...]`
       );
 
       let questions;
@@ -2040,13 +2244,17 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
           <summary>💡 Show hint</summary>
           <span>${escHtml(prettyMath(item.hint))}</span>
         </details>` : ''}
-        <div class="written-input-wrap" style="margin-top:1.25rem">
+        <div class="math-answer-preview" id="math-preview" style="margin-top:1.25rem">
+          <span class="preview-label">What you're submitting</span>
+          <span class="preview-value" id="math-preview-val"></span>
+        </div>
+        <div class="written-input-wrap">
           <input id="math-answer" type="text" class="written-answer-input"
             placeholder="Your answer…" autocomplete="off" />
           <button class="btn btn-primary btn-wide" id="math-check-btn" onclick="mathAISubmit()">Check</button>
         </div>
         <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">
-          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π · <code>(2, 3)</code> or <code>(2,3)</code> both work
+          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π · spaces &amp; commas ignored
         </div>
         <div id="math-feedback" class="written-feedback"></div>
         <div id="math-next" class="quiz-next" style="display:none">
@@ -2059,6 +2267,12 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
     const inp = document.getElementById('math-answer');
     inp.focus();
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') mathAISubmit(); });
+    inp.addEventListener('input', () => {
+      const el = document.getElementById('math-preview-val');
+      if (el) el.textContent = prettyMath(inp.value);
+    });
+
+    let attempts = 0;
 
     window.mathAISubmit = function() {
       const inp2 = document.getElementById('math-answer');
@@ -2066,20 +2280,40 @@ function runAIMathSession(app, questions, topic, difficulty, total) {
       const val = inp2.value.trim();
       if (!val) { showToast('Enter an answer first.'); return; }
 
-      const isCorrect = normalizeMath(val) === normalizeMath(item.answer);
-
-      if (isCorrect) score++; else wrong++;
-      inp2.disabled = true;
-      inp2.classList.add(isCorrect ? 'written-correct' : 'written-wrong');
-      document.getElementById('math-check-btn').disabled = true;
+      const allAnswers = [item.answer, ...(Array.isArray(item.alternates) ? item.alternates : [])];
+      const isCorrect  = allAnswers.some(a => normalizeMath(val) === normalizeMath(a));
+      attempts++;
 
       const fb = document.getElementById('math-feedback');
-      fb.className = `written-feedback ${isCorrect ? 'correct' : 'wrong'}`;
-      fb.innerHTML = isCorrect
-        ? '✓ Correct!'
-        : `✗ Incorrect — answer: <strong>${escHtml(prettyMath(item.answer))}</strong>`;
 
-      document.getElementById('math-next').style.display = 'flex';
+      if (isCorrect) {
+        score++;
+        inp2.disabled = true;
+        inp2.classList.add('written-correct');
+        document.getElementById('math-check-btn').disabled = true;
+        fb.className  = 'written-feedback correct';
+        fb.innerHTML  = attempts === 1 ? '✓ Correct!' : '✓ Correct on your second try!';
+        document.getElementById('math-next').style.display = 'flex';
+      } else if (attempts < 2) {
+        // First wrong attempt — let them try once more
+        fb.className = 'written-feedback try-again';
+        fb.innerHTML = '✗ Not quite — try again!';
+        inp2.value   = '';
+        const prevEl = document.getElementById('math-preview-val');
+        if (prevEl) prevEl.textContent = '';
+        inp2.focus();
+      } else {
+        // Second wrong attempt — reveal the answer
+        wrong++;
+        inp2.disabled = true;
+        inp2.classList.add('written-wrong');
+        document.getElementById('math-check-btn').disabled = true;
+        fb.className = 'written-feedback wrong';
+        const extras = (item.alternates || []).map(a => `<li>${escHtml(prettyMath(a))}</li>`).join('');
+        fb.innerHTML = `✗ Incorrect — accepted answer${item.alternates?.length ? 's' : ''}:<ul style="margin:.35rem 0 0 1.1rem;padding:0">
+          <li><strong>${escHtml(prettyMath(item.answer))}</strong></li>${extras}</ul>`;
+        document.getElementById('math-next').style.display = 'flex';
+      }
     };
 
     window.mathAINext = function() { idx++; renderQ(); };
@@ -2190,13 +2424,17 @@ function renderMathQuiz(app, mode) {
       </div>
       <div class="quiz-card">
         <div class="quiz-question" style="font-size:1.6rem;font-family:monospace;letter-spacing:.02em">${escHtml(prettyMath(q))}</div>
+        <div class="math-answer-preview" id="math-preview">
+          <span class="preview-label">What you're submitting</span>
+          <span class="preview-value" id="math-preview-val"></span>
+        </div>
         <div class="written-input-wrap">
           <input id="math-answer" type="text" class="written-answer-input"
             placeholder="Your answer…" autocomplete="off" inputmode="decimal" />
           <button class="btn btn-primary btn-wide" onclick="mathSubmit('${escAttr(correctAns)}')">Check</button>
         </div>
         <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">
-          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π
+          Tip: type <code>sqrt(5)</code> for √5 · <code>theta</code> for θ · <code>pi</code> for π · spaces &amp; commas ignored
         </div>
         <div id="math-feedback" class="written-feedback"></div>
         <div id="math-next" class="quiz-next" style="display:none">
@@ -2209,6 +2447,10 @@ function renderMathQuiz(app, mode) {
     const inp = document.getElementById('math-answer');
     inp.focus();
     inp.addEventListener('keydown', e => { if (e.key==='Enter') mathSubmit(correctAns); });
+    inp.addEventListener('input', () => {
+      const el = document.getElementById('math-preview-val');
+      if (el) el.textContent = prettyMath(inp.value);
+    });
   }
 
   window.mathSubmit = function(correctAns) {
