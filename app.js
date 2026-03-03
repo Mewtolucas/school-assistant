@@ -579,11 +579,12 @@ function renderStudy(app, setId) {
   let flipped  = false;
   let gotIt    = 0;
   let learning = 0;
-  const answered = new Set();
+  const gotItSet = new Set(); // tracks cards marked "Got It" — no re-marking allowed
 
   function cardHtml(card, idx) {
-    const mastery = DB.getMastery(set);
-    const progress = answered.size ? Math.round((answered.size / cards.length) * 100) : 0;
+    const mastery  = DB.getMastery(set);
+    const progress = gotItSet.size ? Math.round((gotItSet.size / cards.length) * 100) : 0;
+    const isDone   = gotItSet.has(card.id);
 
     return `
       <div class="study-header">
@@ -616,10 +617,10 @@ function renderStudy(app, setId) {
       </div>
 
       <div class="study-feedback-btns">
-        <button class="btn btn-danger" onclick="markCard(false)" title="Still learning">
+        <button class="btn btn-danger" onclick="markCard(false)" title="Still learning" ${isDone ? 'disabled' : ''}>
           ✗ Still Learning
         </button>
-        <button class="btn btn-success" onclick="markCard(true)" title="Got it">
+        <button class="btn btn-success" onclick="markCard(true)" title="Got it" ${isDone ? 'disabled' : ''}>
           ✓ Got It
         </button>
       </div>
@@ -628,7 +629,7 @@ function renderStudy(app, setId) {
         <div class="progress-bar-wrap" style="margin-top:1.5rem">
           <div class="progress-bar-label">
             <span>Session progress</span>
-            <span>${answered.size}/${cards.length} answered</span>
+            <span>${gotItSet.size}/${cards.length} got it</span>
           </div>
           <div class="progress-bar">
             <div class="progress-bar-fill" style="width:${progress}%"></div>
@@ -643,22 +644,17 @@ function renderStudy(app, setId) {
   }
 
   function renderCard() {
-    if (current >= cards.length) {
-      showComplete();
-      return;
-    }
+    if (current >= cards.length) { current = 0; }
     app.innerHTML = cardHtml(cards[current], current);
     flipped = false;
   }
 
   function showComplete() {
-    const pct = cards.length ? Math.round(gotIt / cards.length * 100) : 0;
     app.innerHTML = `
       <div class="study-complete">
         <div style="font-size:2.5rem">🎉</div>
         <h2>Session Complete!</h2>
         <p>You went through all ${cards.length} cards.</p>
-        <div class="big-score">${pct}%</div>
         <p style="margin-bottom:1.5rem"><strong style="color:var(--success)">${gotIt}</strong> got it &nbsp;·&nbsp; <strong style="color:var(--danger)">${learning}</strong> still learning</p>
         <div class="complete-actions">
           <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
@@ -683,12 +679,28 @@ function renderStudy(app, setId) {
   };
 
   window.markCard = function(correct) {
-    DB.recordCardAnswer(setId, cards[current].id, correct);
-    answered.add(cards[current].id);
-    if (correct) gotIt++; else learning++;
-    // Move to next
-    if (current < cards.length - 1) { current++; renderCard(); }
-    else showComplete();
+    const cardId = cards[current].id;
+    if (gotItSet.has(cardId)) return; // prevent re-marking an already "Got It" card
+
+    DB.recordCardAnswer(setId, cardId, correct);
+
+    if (correct) {
+      gotItSet.add(cardId);
+      gotIt++;
+      if (gotIt === cards.length) { showComplete(); return; }
+    } else {
+      learning++;
+    }
+
+    // Advance to the next card that hasn't been "Got It" yet (wrap around if needed)
+    for (let i = 1; i <= cards.length; i++) {
+      const candidate = (current + i) % cards.length;
+      if (!gotItSet.has(cards[candidate].id)) {
+        current = candidate;
+        break;
+      }
+    }
+    renderCard();
   };
 
   renderCard();
