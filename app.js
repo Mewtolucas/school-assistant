@@ -245,6 +245,7 @@ function render() {
     case 'study':     renderStudy(app, param);        break;
     case 'quiz':      renderQuiz(app, param);         break;
     case 'written':   renderWrittenQuiz(app, param);  break;
+    case 'listing':   renderListing(app, param);      break;
     case 'shared':    renderShared(app, param);       break;
     case 'tools':     renderToolsHub(app);            break;
     case 'geo':       renderGeoHub(app);              break;
@@ -318,6 +319,7 @@ function renderHome(app) {
           <button class="btn btn-primary btn-sm" onclick="navigate('study/${set.id}')">Study</button>
           <button class="btn btn-outline btn-sm" onclick="navigate('quiz/${set.id}')">Quiz</button>
           <button class="btn btn-outline btn-sm" onclick="navigate('written/${set.id}')">Written</button>
+          <button class="btn btn-outline btn-sm" onclick="navigate('listing/${set.id}')">Listing</button>
           <button class="btn btn-ghost btn-sm" onclick="navigate('edit/${set.id}')">Edit</button>
           ${set.isPublic
             ? `<button class="btn btn-ghost btn-sm" onclick="openShare('${set.id}')">Share</button>`
@@ -659,6 +661,7 @@ function renderStudy(app, setId) {
         <div class="complete-actions">
           <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
           <button class="btn btn-outline" onclick="navigate('study/${setId}')">Study Again</button>
+          <button class="btn btn-outline" onclick="navigate('listing/${setId}')">Listing</button>
           <button class="btn btn-primary" onclick="navigate('quiz/${setId}')">Take Quiz</button>
         </div>
       </div>`;
@@ -1187,6 +1190,178 @@ function renderWrittenQuiz(app, setId) {
   }
 
   renderQuestion();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LISTING TOOL
+   ═══════════════════════════════════════════════════════════ */
+function renderListing(app, setId) {
+  const set = DB.getSetById(setId);
+  if (!set) { navigate('home'); return; }
+
+  const cards = set.cards;
+  if (cards.length === 0) {
+    app.innerHTML = `
+      <div class="info-screen">
+        <div style="font-size:2.5rem">📚</div>
+        <h2>No Cards</h2>
+        <p>Add cards to this set before using Listing.</p>
+        <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
+          <button class="btn btn-primary" onclick="navigate('edit/${setId}')">Edit Set</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const recalled = new Set(); // card IDs marked as recalled
+  let finished = false;
+
+  function normalize(s) {
+    return String(s).trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+  }
+
+  function renderMain() {
+    const progress     = Math.round((recalled.size / cards.length) * 100);
+    const recalledCards = cards.filter(c => recalled.has(c.id));
+
+    const itemsHtml = recalledCards.length
+      ? recalledCards.map(c => `
+          <div class="listing-item listing-item-recalled">
+            <span class="listing-item-mark">✓</span>
+            <span>${escHtml(c.front)}</span>
+          </div>`).join('')
+      : `<p style="color:var(--text-muted);font-size:.9rem;margin:.5rem 0">Nothing recalled yet — start typing!</p>`;
+
+    app.innerHTML = `
+      <div class="study-header">
+        <div>
+          <div style="font-size:.75rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em">Listing</div>
+          <h2>${escHtml(set.name)}</h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('home')">← Back</button>
+      </div>
+
+      <div style="max-width:640px;margin:0 auto">
+        <div class="progress-bar-wrap" style="margin-bottom:1.25rem">
+          <div class="progress-bar-label">
+            <span>${recalled.size} / ${cards.length} recalled</span>
+            <span>${cards.length - recalled.size} remaining</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" style="width:${progress}%"></div>
+          </div>
+        </div>
+
+        <div class="quiz-card" style="margin-bottom:1rem">
+          <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:.75rem;text-align:center">
+            Name all the items in this set from memory. Type each one and press Enter.
+          </p>
+          <div style="display:flex;gap:.5rem">
+            <input id="listing-input" type="text" class="written-answer-input"
+              placeholder="Type an item…" autocomplete="off" spellcheck="false" style="flex:1" />
+            <button class="btn btn-primary" onclick="listingSubmit()">Enter</button>
+          </div>
+          <div id="listing-feedback" class="written-feedback" style="margin-top:.5rem"></div>
+        </div>
+
+        <div class="listing-grid">${itemsHtml}</div>
+
+        <div style="display:flex;justify-content:center;margin-top:1.5rem">
+          <button class="btn btn-ghost" onclick="listingGiveUp()">Give Up — Show Answers</button>
+        </div>
+      </div>`;
+
+    const inp = document.getElementById('listing-input');
+    if (inp) {
+      inp.focus();
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') listingSubmit(); });
+    }
+  }
+
+  function showResults(gaveUp) {
+    finished = true;
+    const recalledCards = cards.filter(c =>  recalled.has(c.id));
+    const missedCards   = cards.filter(c => !recalled.has(c.id));
+
+    const recalledHtml = recalledCards.map(c => `
+      <div class="listing-item listing-item-recalled">
+        <span class="listing-item-mark">✓</span>
+        <span>${escHtml(c.front)}</span>
+      </div>`).join('');
+
+    const missedHtml = missedCards.map(c => `
+      <div class="listing-item listing-item-missed">
+        <span class="listing-item-mark">✗</span>
+        <span>${escHtml(c.front)}</span>
+      </div>`).join('');
+
+    app.innerHTML = `
+      <div class="study-complete" style="max-width:560px">
+        <div style="font-size:2.5rem">${gaveUp ? '📋' : '🎉'}</div>
+        <h2>${gaveUp ? 'Session Ended' : 'All Recalled!'}</h2>
+        <p style="margin-bottom:1rem">
+          <strong style="color:var(--success)">${recalledCards.length}</strong> recalled &nbsp;·&nbsp;
+          <strong style="color:${missedCards.length ? 'var(--danger)' : 'var(--success)'}">${missedCards.length}</strong> missed
+        </p>
+
+        ${recalledCards.length ? `
+        <div style="text-align:left;margin-bottom:1rem">
+          <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:.4rem">Recalled</div>
+          <div class="listing-grid">${recalledHtml}</div>
+        </div>` : ''}
+
+        ${missedCards.length ? `
+        <div style="text-align:left;margin-bottom:1.5rem">
+          <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:.4rem">Missed</div>
+          <div class="listing-grid">${missedHtml}</div>
+        </div>` : ''}
+
+        <div class="complete-actions">
+          <button class="btn btn-ghost" onclick="navigate('home')">← Home</button>
+          <button class="btn btn-outline" onclick="navigate('listing/${setId}')">Try Again</button>
+          <button class="btn btn-primary" onclick="navigate('quiz/${setId}')">Take Quiz</button>
+        </div>
+      </div>`;
+  }
+
+  window.listingSubmit = function() {
+    if (finished) return;
+    const inp = document.getElementById('listing-input');
+    if (!inp) return;
+    const val = inp.value.trim();
+    if (!val) return;
+
+    const normVal = normalize(val);
+    const match = cards.find(c => !recalled.has(c.id) && normalize(c.front) === normVal);
+    const fb = document.getElementById('listing-feedback');
+
+    if (match) {
+      recalled.add(match.id);
+      inp.value = '';
+      if (recalled.size === cards.length) { showResults(false); return; }
+      renderMain();
+      // Flash success on the freshly-rendered feedback element
+      const newFb = document.getElementById('listing-feedback');
+      if (newFb) {
+        newFb.className = 'written-feedback correct';
+        newFb.textContent = `✓ "${match.front}"`;
+        setTimeout(() => { if (newFb) { newFb.className = 'written-feedback'; newFb.textContent = ''; } }, 1500);
+      }
+    } else {
+      const alreadyGot = cards.some(c => recalled.has(c.id) && normalize(c.front) === normVal);
+      if (fb) {
+        fb.className = 'written-feedback try-again';
+        fb.textContent = alreadyGot ? `Already recalled!` : `Not in this set.`;
+        setTimeout(() => { if (fb) { fb.className = 'written-feedback'; fb.textContent = ''; } }, 1500);
+      }
+      inp.select();
+    }
+  };
+
+  window.listingGiveUp = function() { showResults(true); };
+
+  renderMain();
 }
 
 /* ═══════════════════════════════════════════════════════════
