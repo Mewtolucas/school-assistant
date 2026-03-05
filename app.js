@@ -488,8 +488,13 @@ function renderCreate(app, setId) {
         <label for="cards-input">Flashcards</label>
         <textarea id="cards-input" placeholder="Front side|Back side
 Another front|Another back
-Capital of France|Paris">${escHtml(existingText)}</textarea>
-        <span class="hint">One card per line. Separate front and back with a pipe character <code>|</code></span>
+Capital of France|Paris
+Single term with no definition yet">${escHtml(existingText)}</textarea>
+        <span class="hint">One card per line. Separate front and back with <code>|</code> — or enter terms only and use AI to fill in definitions.</span>
+        <button type="button" class="btn btn-outline btn-sm" id="gen-defs-btn"
+          onclick="generateDefinitions()" style="margin-top:.5rem;align-self:flex-start">
+          ✨ Generate Definitions with AI
+        </button>
       </div>
 
       <div id="card-preview" class="card-preview-section" style="display:none">
@@ -536,6 +541,61 @@ Capital of France|Paris">${escHtml(existingText)}</textarea>
     list.innerHTML = html;
   }
 }
+
+window.generateDefinitions = async function() {
+  const textarea = document.getElementById('cards-input');
+  const btn      = document.getElementById('gen-defs-btn');
+  if (!textarea || !btn) return;
+
+  const lines    = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
+  const termOnly = lines.filter(l => !l.includes('|'));
+
+  if (termOnly.length === 0) {
+    showToast('All lines already have definitions.');
+    return;
+  }
+
+  const { provider, apiKey } = getAIConfig();
+  if (!apiKey) {
+    showToast('No AI key saved — use any AI tool first to store your key.');
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ Generating…';
+
+  const setName = document.getElementById('set-name').value.trim();
+  const context = setName ? ` for a flashcard set titled "${setName}"` : '';
+
+  const systemPrompt = 'You generate concise, accurate flashcard definitions. Respond ONLY with a valid JSON array, no commentary.';
+  const userPrompt   =
+    `Generate a short, clear definition (1–2 sentences) for each term below${context}.\n` +
+    `Respond ONLY with a JSON array in the same order: [{"term":"...","definition":"..."}, ...]\n\n` +
+    `Terms:\n` + termOnly.map((t, i) => `${i + 1}. ${t}`).join('\n');
+
+  try {
+    const raw    = await callAI(provider, apiKey, systemPrompt, userPrompt);
+    const parsed = JSON.parse(raw.match(/\[[\s\S]*\]/)[0]);
+
+    // Fill definitions back in by index (same order as sent)
+    let defIdx = 0;
+    const newLines = lines.map(line => {
+      if (line.includes('|') || defIdx >= parsed.length) return line;
+      const def = (parsed[defIdx].definition || '').trim();
+      defIdx++;
+      return def ? `${line}|${def}` : line;
+    });
+
+    textarea.value = newLines.join('\n');
+    textarea.dispatchEvent(new Event('input')); // refresh preview
+    showToast(`✓ Definitions added for ${parsed.length} term(s).`);
+  } catch (e) {
+    showToast('AI error: ' + (e.message || 'Could not generate definitions.'));
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '✨ Generate Definitions with AI';
+  }
+};
 
 window.saveSet = function(setId) {
   const name = document.getElementById('set-name').value.trim();
