@@ -1152,7 +1152,12 @@ function renderWrittenQuiz(app, setId) {
 
     const input = document.getElementById('written-answer');
     input.focus();
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') submitWritten(); });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if (answered) nextWrittenQuestion();
+        else submitWritten();
+      }
+    });
 
     window.submitWritten = function() {
       if (answered) return;
@@ -1177,14 +1182,7 @@ function renderWrittenQuiz(app, setId) {
         : `✗ Incorrect — the answer was: <strong>${escHtml(card.back)}</strong>`;
 
       document.getElementById('quiz-next').style.display = 'flex';
-
-      const onEnterNext = (e) => {
-        if (e.key === 'Enter') {
-          document.removeEventListener('keydown', onEnterNext);
-          nextWrittenQuestion();
-        }
-      };
-      document.addEventListener('keydown', onEnterNext);
+      input.focus();
     };
   }
 
