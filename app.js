@@ -1177,6 +1177,14 @@ function renderWrittenQuiz(app, setId) {
         : `✗ Incorrect — the answer was: <strong>${escHtml(card.back)}</strong>`;
 
       document.getElementById('quiz-next').style.display = 'flex';
+
+      const onEnterNext = (e) => {
+        if (e.key === 'Enter') {
+          document.removeEventListener('keydown', onEnterNext);
+          nextWrittenQuestion();
+        }
+      };
+      document.addEventListener('keydown', onEnterNext);
     };
   }
 
